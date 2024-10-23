@@ -10,7 +10,12 @@ surf([-4,-4;4,4] ...
 ,'FaceColor','texturemap')
 
 scaledFac= 0.01;
-phone = PlaceObject('Phone.ply', [-0.7/scaledFac,0/scaledFac,0.5/scaledFac]);
+
+phoneInitPos = [-0.46,-0.19,0.5];
+phoneFinalPos = [0.46,-0.19,0.5];
+
+
+phone= PlaceObject('Phone.ply', [phoneInitPos(1)/scaledFac,phoneInitPos(2)/scaledFac,phoneInitPos(3)/scaledFac]);
 scaledVerticesPhone = get(phone, 'Vertices') * scaledFac;
 set(phone, 'Vertices', scaledVerticesPhone);
 
@@ -81,7 +86,8 @@ set(me, 'Parent', tform);
 % Collision objects 
 centerpnt = [0,-1.5,0];
 side = 2;
-plotOptions.plotFaces = true;
+plotOptions.plotFaces = true; % Set this to false to hide cube from plot
+
 [vertex,faces,faceNormals] = RectangularPrism(centerpnt-side/2, centerpnt+side/2,plotOptions);
 
 groundCenter = [0, 0, 0.25];  % Center point of the cuboid
@@ -103,56 +109,6 @@ r2BaseTransform = transl(-2, -1.2, 0.6);
 r2.model.base = r2BaseTransform;
 r2.model.plot(zeros(1, r2.model.n))
 
-%% Proximity sensing
-q = [0,0,0,deg2rad(-90), deg2rad(-90),0];  % Initial joint configuration
-% Define the cube's initial position and size
-cubeCenter = [-0.6, 0.5, 0.6];  % Cube's initial center position (x, y, z)
-cubeSize = [0.2, 0.2, 0.2];  % Cube's size (length, width, height)
-
-% Plot the cube
-[vertex, faces, faceNormals] = RectangularPrism(cubeCenter - cubeSize / 2, cubeCenter + cubeSize / 2);
-patch('Vertices', vertex, 'Faces', faces, 'FaceColor', 'red', 'FaceAlpha', 0.8);
-
-% Desired distance from the cube
-desiredDistance = 0.5;  % 0.5 meters
-speed = 2;           % Speed at which robot adjusts its position
-
-for t = 1:200  % Simulate for 200 iterations (can adjust as necessary)
-    % Simulate the cube moving along the y-axis in the opposite direction
-    cubeCenter = cubeCenter + [0, -0.01 * sin(t * 0.05), 0];  % Move cube in the opposite direction along y-axis
-    [vertex, ~, ~] = RectangularPrism(cubeCenter - cubeSize / 2, cubeCenter + cubeSize / 2);
-    delete(findobj('FaceColor', 'red'));  % Remove previous cube plot
-    patch('Vertices', vertex, 'Faces', faces, 'FaceColor', 'red', 'FaceAlpha', 0.8);  % Re-plot the cube
-
-    % Get the current end-effector position (fkine gives SE3 object, so we access the .T property for matrix)
-    tr = r1.model.fkine(q).T;
-    endEffectorPos = tr(1:3, 4)';  % Current end-effector position
-
-    % Calculate the vector from the end-effector to the cube's center
-    vectorToCube = cubeCenter - endEffectorPos;
-
-    % Calculate the distance between the end-effector and the cube
-    distanceToCube = norm(vectorToCube);
-
-    % If the distance is greater than the desired distance, move closer
-    if distanceToCube > desiredDistance
-        moveDirection = vectorToCube / distanceToCube;  % Normalize the direction vector
-        newEndEffectorPos = endEffectorPos + moveDirection * (distanceToCube - desiredDistance) * speed;
-
-        % Calculate the new joint angles using inverse kinematics to reach the new position
-        qNew = r1.model.ikcon(transl(newEndEffectorPos), q);  % Use inverse kinematics to find new joint configuration
-
-        % Update robot configuration and animate
-        r1.model.animate(qNew);
-        q = qNew;  % Update current joint configuration
-    end
-
-    % Pause to slow down animation and create real-time effect
-    pause(0.05);
-end
-
-
-
 %% Activate & Animate R1
 q0 = [0,0,0,deg2rad(-90), deg2rad(-90),0]; % Starting pose\
 q1 = [0,0,deg2rad(5),deg2rad(-90), deg2rad(-90),0]; 
@@ -164,11 +120,20 @@ stepsR1 = 100;  % Number of steps
 deltaT = 0.05;  % Time step
 epsilon = 0.2;  % Threshold for manipulability
 
-
 qMat1 = jtraj(q0,q1,stepsMini);
 qMat2 = jtraj(q2,q3,stepsMini); 
 r1.model.animate(qMat1)
 drawnow();
+
+% Phone handles 
+robotPhoneOffset = 0.07;
+tPhoneStart = transl(phoneInitPos(1),phoneInitPos(2),phoneInitPos(3)+robotPhoneOffset);
+tPhoneEnd = transl(phoneFinalPos(1),phoneFinalPos(2),phoneFinalPos(3)+robotPhoneOffset);
+
+q1 = r1.model.ikine(tPhoneStart,'mask', [1 1 1 0 0 0]);
+q2 = r1.model.ikine(tPhoneEnd,'mask', [1 1 1 0 0 0]);
+
+% Time scaling to speed up near bed 
 
 sigmoid_time = @(t) 1 ./ (1 + exp(-20*(t - 0.2)));  % Sigmoid scaling
 scaled_t = sigmoid_time(linspace(0, 1, stepsR1));     % Scale the time non-linearly
@@ -251,11 +216,19 @@ scaled_t = sigmoid_time(linspace(0, 1, stepsR1));     % Scale the time non-linea
     end
 
 
-
     % Animate the motion from q1 to q2
     for i = 1:stepsR1
         r1.model.animate(qMatrix1(i, :));  % Animate robot
         drawnow();
+        currentQ_R1 = qMatrix1(i, :);
+        currentPos_R1 = r1.model.fkine(currentQ_R1).T; % End effector pose of robot during motion
+        currentPos_R1 = currentPos_R1(1:3, 4);
+        currentPos_R1(3) = currentPos_R1(3) - robotPhoneOffset;
+        phonePosUpdated = currentPos_R1';
+        delete(phone); 
+        phone = PlaceObject('phone.ply', [phonePosUpdated(1)/scaledFac,phonePosUpdated(2)/scaledFac,phonePosUpdated(3)/scaledFac]);
+        scaledVerticesPhone = get(phone, 'Vertices') * scaledFac;
+        set(phone, 'Vertices', scaledVerticesPhone);
     end
 
     pause(0.5);
@@ -275,6 +248,15 @@ end
 for i = 1:stepsR1
     r1.model.animate(qMatrix2(i, :));
     drawnow();
+    currentQ_R1 = qMatrix2(i, :);
+    currentPos_R1 = r1.model.fkine(currentQ_R1).T; % End effector pose of robot during motion
+    currentPos_R1 = currentPos_R1(1:3, 4);
+    currentPos_R1(3) = currentPos_R1(3) - robotPhoneOffset;
+    phonePosUpdated = currentPos_R1';
+    delete(phone); 
+    phone = PlaceObject('phone.ply', [phonePosUpdated(1)/scaledFac,phonePosUpdated(2)/scaledFac,phonePosUpdated(3)/scaledFac]);
+    scaledVerticesPhone = get(phone, 'Vertices') * scaledFac;
+    set(phone, 'Vertices', scaledVerticesPhone);
 end
 pause(0.5);
 
