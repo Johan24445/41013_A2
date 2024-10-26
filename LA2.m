@@ -104,9 +104,9 @@ r1BaseTransform = transl(0,0, 0.5);
 r1.model.base = r1BaseTransform;
 r1.model.plot(zeros(1, r1.model.n))
 
-r2 = UR3;
-r2BaseTransform = transl(-2, -1.2, 0.6);
-r2.model.base = r2BaseTransform;
+r2 = KinovaLink6;    
+r2BaseTransform = transl(-2.25, -1.5, 0.6)* trotz(pi/2  );
+r2.model.base = r2BaseTransform;    
 r2.model.plot(zeros(1, r2.model.n))
 
 %% Activate & Animate R1
@@ -156,7 +156,7 @@ scaled_t = sigmoid_time(linspace(0, 1, stepsR1));     % Scale the time non-linea
         % Fixed x, y position, movement in z and over-the-head rotation
         x(:,i) = (1 - scaled_t(i)) * T1(1:3, 4) + scaled_t(i) * T2(1:3, 4);
         x(3,i) = x(3,i) + 0.2 * sin(pi * scaled_t(i));  % Overhead movement (z-axis)
-        
+
         theta(1,i) = 0;  % Roll (constant)
         theta(2,i) = pi * scaled_t(i);  % Pitch (over the head)
         theta(3,i) = 0;  % Yaw (constant)
@@ -189,7 +189,7 @@ scaled_t = sigmoid_time(linspace(0, 1, stepsR1));     % Scale the time non-linea
         m(i) = sqrt(det(J*J'));         % Record manipulability
 
         % Apply Damped Least Squares (DLS) if manipulability is low
-       
+
 
         if m(i) < epsilon  % If manipulability is less than given threshold
             lambda = (1 - m(i)/epsilon)*5E-2;
@@ -197,11 +197,11 @@ scaled_t = sigmoid_time(linspace(0, 1, stepsR1));     % Scale the time non-linea
             lambda = 0;
         end
             invJ = inv(J'*J + lambda *eye(6))*J';                                   % DLS Inverse
-    
+
 
         % Compute joint velocities using the inverse Jacobian
         qdot(i,:) = (invJ * xdot)';  % Joint velocities
-        
+
         for j = 1:6                                                             % Loop through joints 1 to 6
             if qMatrix1(i,j) + deltaT*qdot(i,j) < r1.model.qlim(j,1)                     % If next joint angle is lower than joint limit...
                 qdot(i,j) = 0; % Stop the motor
@@ -236,7 +236,7 @@ scaled_t = sigmoid_time(linspace(0, 1, stepsR1));     % Scale the time non-linea
      % Pick phone and return (q3->q0)
 r1.model.animate(qMat2)
 drawnow();
-   
+
 % Precompute the trajectory using the scaled time
 qMatrix2 =zeros(stepsR1, length(q3));
 for i = 1:stepsR1
@@ -345,17 +345,33 @@ end
 r1.model.animate(qMatrixCA)
 
 %% Activate R2
-stepsR2 = 50; 
+% Define start and target poses (both position and orientation)
+targetPose = transl(-2.25, -1, 0.8) * trotx(pi); % Target pose with orientation
 
-q3 =[0,0,0,0,0,0];
-q4 = [deg2rad(90),deg2rad(-145),deg2rad(-65),deg2rad(-90),deg2rad(90),deg2rad(0)];
-qMatrix3 = jtraj(q3, q4, stepsR2);
-for i = 1:stepsR2
-    r2.model.animate(qMatrix3(i, :));  
-    drawnow();  
+% Get the current joint configuration using getpos()
+qStart = r2.model.getpos(); % Get current joint angles
+
+% Use inverse kinematics to find the target joint angles
+qTarget = r2.model.ikcon(targetPose, qStart); % Target joint config
+
+% Set the number of steps for the trajectory
+numSteps = 25;
+
+% Generate a joint trajectory between current and target configurations
+qTrajectory = jtraj(qStart, qTarget, numSteps);
+
+
+for repeat = 1:3    
+    % Animate the robot following the joint trajectory
+    for i = 1:numSteps
+        r2.model.animate(qTrajectory(i, :));
+    end
+    
+    % Return to the start position for the next repetition
+    for i = numSteps:-1:1
+        r2.model.animate(qTrajectory(i, :));
+    end
 end
-
-
 %%  IsIntersectionPointInsideTriangle
 % Given a point which is known to be on the same plane as the triangle
 % determine if the point is 
