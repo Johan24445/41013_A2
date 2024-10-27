@@ -2,6 +2,24 @@
 % UR3 Robot Setup
 axis equal;
 hold on;
+lc1 = PlaceObject('lightcurtain.ply',[0.77,0.8,-0.46]);
+lcRot= pi/2;
+scale = 0.65; 
+tform = hgtransform;
+R_lc = makehgtform('xrotate', lcRot,'scale', scale);
+set(tform, 'Matrix', R_lc);
+set(lc1, 'Parent', tform);
+
+
+lc2 = PlaceObject('lightcurtain.ply',[-0.77,0.8,-0.46]);
+lcRot= pi/2;
+scale = 0.65; 
+tform = hgtransform;
+R_lc = makehgtform('xrotate', lcRot,'scale', scale);
+set(tform, 'Matrix', R_lc);
+set(lc2, 'Parent', tform);
+
+
 
 r = UR3;  % Initialize UR3 robot
 q1 = [0, 0, 0, 0, 0, 0];  % Initial joint configuration
@@ -13,7 +31,7 @@ r.model.plot(q1);  % Plot UR3 in the initial position
 % Define a light curtain area using a simple surface plot
 [x, z] = meshgrid(-0.5:0.01:0.5, 0:0.01:1);  % X and Z grid for the light curtain
 y(1:size(x,1),1:1) = 0.3;  % Fixed Y location for light curtain
-lightCurtain = surf(x, y, z, 'FaceAlpha', 0.1, 'EdgeColor', 'red');  % Create light curtain
+lc2 = surf(x, y, z, 'FaceAlpha', 0.1, 'EdgeColor', 'red');  % Create light curtain
 
 %% Load Hand Model
 % Load the hand .ply file
@@ -43,7 +61,7 @@ for i = 1:steps
     curtainOffset = 0.3 + handSizeY;
     % Check if hand enters the light curtain by detecting Y-axis crossing
     if max(transformedVertices(:, 2)) <= curtainOffset  % Check if hand crosses Y=0.2 (light curtain)
-        fprintf('Light Curtain has been activated!\n');
+        fprintf('EMERGENCY! FOREIGN OBJECT DETECTED\n');
         set(gcf, 'color', 'r');  % Change figure background to red to indicate detection
     else
         set(gcf, 'color', 'w');  % Reset figure background to white
