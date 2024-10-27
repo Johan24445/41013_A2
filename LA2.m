@@ -110,7 +110,7 @@ r2.model.base = r2BaseTransform;
 r2.model.plot(zeros(1, r2.model.n))
 
 %% Activate & Animate R1
-q0 = [0,0,0,deg2rad(-90), deg2rad(-90),0]; % Starting pose\
+q0 = [0,0,0,deg2rad(-90), deg2rad(-90),0]; % Starting pose
 q1 = [0,0,deg2rad(5),deg2rad(-90), deg2rad(-90),0]; 
 q2 = [deg2rad(200), 0, 0, deg2rad(-90), deg2rad(-90), 0]; % drops phone 
 q3 = [deg2rad(200), 0,deg2rad(5) , deg2rad(-90), deg2rad(-90), 0];
@@ -261,11 +261,12 @@ end
 pause(0.5);
 
 %% Collision detection R1
-q0 = [0,0,0,deg2rad(-90), deg2rad(-90),0]; % Starting pose\
+q0 = [0,0,0,deg2rad(-90), deg2rad(-90),0]; % Starting pose
 q1 = [0,0,deg2rad(5),deg2rad(-90), deg2rad(-90),0]; 
 q2 = [deg2rad(200), 0, 0, deg2rad(-90), deg2rad(-90), 0]; % drops phone 
 q3 = [deg2rad(200), 0,deg2rad(5) , deg2rad(-90), deg2rad(-90), 0];
 
+% q0 = [0,deg2rad(45),0,deg2rad(-90), deg2rad(-90),0]; % Ground CD
 q = zeros(1,6);  
 
 tr1 = zeros(4,4,r1.model.n+1);
@@ -273,26 +274,6 @@ tr1(:,:,1) = r1.model.base;
 L = r1.model.links;
 for i = 1 : r1.model.n
     tr1(:,:,i+1) = tr1(:,:,i) * trotz(q(i)+L(i).offset) * transl(0,0,L(i).d) * transl(L(i).a,0,0) * trotx(L(i).alpha);
-end
-
-for i = 1 : size(tr1,3)-1    
-    for faceIndex = 1:size(faces,1)
-        vertOnPlane = vertex(faces(faceIndex,1)',:);
-        [intersectP,check] = LinePlaneIntersection(faceNormals(faceIndex,:),vertOnPlane,tr1(1:3,4,i)',tr1(1:3,4,i+1)'); 
-        if check == 1 && IsIntersectionPointInsideTriangle(intersectP,vertex(faces(faceIndex,:)',:))
-            plot3(intersectP(1),intersectP(2),intersectP(3),'g*');
-            disp('Collision with cube');
-        end
-    end 
-
-    for faceIndex = 1:size(groundFaces, 1)
-        vertOnGroundPlane = groundVertex(groundFaces(faceIndex, 1)', :);
-        [groundIntersectP, groundCheck] = LinePlaneIntersection(groundFaceNormals(faceIndex, :), vertOnGroundPlane, tr1(1:3, 4, i)', tr1(1:3, 4, i+1)');
-        if groundCheck == 1 && IsIntersectionPointInsideTriangle(groundIntersectP, groundVertex(groundFaces(faceIndex, :)', :))
-            plot3(groundIntersectP(1), groundIntersectP(2), groundIntersectP(3), 'r*');
-            disp(['Collision with ground at joint ', num2str(i)]);
-        end
-    end
 end
 
 steps = 2;
@@ -303,9 +284,16 @@ qMatrixCD = jtraj(q3,q0,steps);
 
 result = true(steps,1);
 for i = 1: steps
-    result(i) = IsCollision(r1.model,qMatrixCD(i,:),faces,vertex,faceNormals,false, groundVertex, groundFaces, groundFaceNormals);
+    result(i) = IsCollision(r1.model,true, qMatrixCD(i,:),faces,vertex,faceNormals,false, groundVertex, groundFaces, groundFaceNormals);
     r1.model.animate(qMatrixCD(i,:));
 end
+figure;
+plot(1:steps, result, 'r-o', 'LineWidth', 2, 'MarkerSize', 5);
+xlabel('Step Number');
+ylabel('Collision Detected (1 = Yes, 0 = No)');
+title('Collision Detection Over Robot Path');
+grid on;
+
 %% Collision avoidance R1
 qWaypoints = [q3;q0];
 isCollision = true;
@@ -315,17 +303,13 @@ while (isCollision)
     startWaypoint = checkedTillWaypoint;
     for i = startWaypoint:size(qWaypoints,1)-1
         qMatrixJoin = InterpolateWaypointRadians(qWaypoints(i:i+1,:),deg2rad(10));
-        if ~IsCollision(r1.model,qMatrixJoin,faces,vertex,faceNormals, false, groundVertex, groundFaces, groundFaceNormals)
-            qMatrixCA = [qMatrixCA; qMatrixJoin]; %#ok<AGROW>
-            r1.model.animate(qMatrixJoin);
-            s = size(qMatrixCA);
-            fprintf('Number of steps: %d\n', s);  
+        if ~IsCollision(r1.model,false, qMatrixJoin,faces,vertex,faceNormals, false, groundVertex, groundFaces, groundFaceNormals)
+            qMatrixCA = [qMatrixCA; qMatrixJoin]; %#ok<AGROW> 
             isCollision = false;
             checkedTillWaypoint = i+1;
-
             % Try and join to the final goal (q0)
             qMatrixJoin = InterpolateWaypointRadians([qMatrixCA(end,:); q0],deg2rad(10));
-            if ~IsCollision(r1.model,qMatrixJoin,faces,vertex,faceNormals,  false, groundVertex, groundFaces, groundFaceNormals)
+            if ~IsCollision(r1.model,false, qMatrixJoin,faces,vertex,faceNormals,false, groundVertex, groundFaces, groundFaceNormals)
                 qMatrixCA = [qMatrixCA;qMatrixJoin];
                 % Reached goal without collision, so break out
                 break;
@@ -333,7 +317,7 @@ while (isCollision)
         else
             % Randomly pick a pose that is not in collision
             qRand = (2 * rand(1,6) - 1) * pi;
-            while IsCollision(r1.model,qRand,faces,vertex,faceNormals, false, groundVertex, groundFaces, groundFaceNormals)
+            while IsCollision(r1.model,false,qRand,faces,vertex,faceNormals, false, groundVertex, groundFaces, groundFaceNormals)
                 qRand = (2 * rand(1,6) - 1) * pi;
             end
             qWaypoints =[ qWaypoints(1:i,:); qRand; qWaypoints(i+1:end,:)];
@@ -343,6 +327,8 @@ while (isCollision)
     end
 end
 r1.model.animate(qMatrixCA)
+s = size(qMatrixCA,1);
+fprintf('Number of steps: %d\n', s); 
 
 %% Activate R2
 % Define start and target poses (both position and orientation)
@@ -411,8 +397,8 @@ end
 % This is based upon the output of questions 2.5 and 2.6
 % Given a robot model (robot), and trajectory (i.e. joint state vector) (qMatrix)
 % and triangle obstacles in the environment (faces,vertex,faceNormals)
-function result = IsCollision(robot,qMatrix,faces,vertex,faceNormals,returnOnceFound, groundVertex, groundFaces, groundFaceNormals)
-if nargin < 6
+function result = IsCollision(robot,detecting,qMatrix,faces,vertex,faceNormals,returnOnceFound, groundVertex, groundFaces, groundFaceNormals)
+if nargin < 7
     returnOnceFound = true;
 end
 result = false;
@@ -421,14 +407,16 @@ for qIndex = 1:size(qMatrix,1)
     % Get the transform of every joint (i.e. start and end of every link)
     tr = GetLinkPoses(qMatrix(qIndex,:), robot);
 
-    % Go through each link and also each triangle face
+    % Go through each link and also each triangle face of cube 
     for i = 1 : size(tr,3)-1    
         for faceIndex = 1:size(faces,1)
             vertOnPlane = vertex(faces(faceIndex,1)',:);
             [intersectP,check] = LinePlaneIntersection(faceNormals(faceIndex,:),vertOnPlane,tr(1:3,4,i)',tr(1:3,4,i+1)'); 
             if check == 1 && IsIntersectionPointInsideTriangle(intersectP,vertex(faces(faceIndex,:)',:))
-                plot3(intersectP(1),intersectP(2),intersectP(3),'g*');
-                display('Intersection');
+                if detecting
+                 plot3(intersectP(1),intersectP(2),intersectP(3),'g*');
+                 display('Collision with cube');
+                end
                 result = true;
                 if returnOnceFound
                     return
@@ -442,8 +430,10 @@ for qIndex = 1:size(qMatrix,1)
                 vertOnGroundPlane = groundVertex(groundFaces(faceIndex, 1)', :);
                 [groundIntersectP, groundCheck] = LinePlaneIntersection(groundFaceNormals(faceIndex, :), vertOnGroundPlane, tr(1:3, 4, i)', tr(1:3, 4, i+1)');
                 if groundCheck == 1 && IsIntersectionPointInsideTriangle(groundIntersectP, groundVertex(groundFaces(faceIndex, :)', :))
-                    plot3(groundIntersectP(1), groundIntersectP(2), groundIntersectP(3), 'r*');
-                    display('Collision with ground');
+                    if detecting
+                     plot3(groundIntersectP(1), groundIntersectP(2), groundIntersectP(3), 'r*');
+                     display('Collision with ground');
+                    end 
                     result = true;
                     if returnOnceFound
                         return;
@@ -466,8 +456,10 @@ for qIndex = 1:size(qMatrix,1)
                 
                 if check == 1
                     % A self-collision is detected
-                    plot3(intersectP(1), intersectP(2), intersectP(3), 'b*');
-                    display(['Self-collision detected between links ', num2str(link1), ' and ', num2str(link2)]);
+                    if detecting
+                     plot3(intersectP(1), intersectP(2), intersectP(3), 'b*');
+                     display(['Self-collision detected between links ', num2str(link1), ' and ', num2str(link2)]);
+                    end
                     result = true;
                     if returnOnceFound
                         return;
