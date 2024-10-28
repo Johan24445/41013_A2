@@ -1,10 +1,14 @@
 classdef LA2 <handle 
    properties (Constant)
 
-        r1= UR3;
-        r2= KinovaLink6;
+        robot1= UR3;
+        robot2= KinovaLink6;
         phoneInitPos = [-0.46,-0.19,0.5];
         phoneFinalPos = [0.46,-0.19,0.5];
+        q0 = [0,0,0,deg2rad(-90), deg2rad(-90),0]; % Starting pose
+        q1 = [0,0,deg2rad(5),deg2rad(-90), deg2rad(-90),0]; % Picks up phone
+        q2 = [deg2rad(200), 0, 0, deg2rad(-90), deg2rad(-90), 0]; % Final pose/ drops phone 
+        q3 = [deg2rad(200), 0,deg2rad(5) , deg2rad(-90), deg2rad(-90), 0]; % Picks up phone
    end
 
    methods
@@ -106,12 +110,12 @@ function Setup()
     [groundVertex, groundFaces, groundFaceNormals] = RectangularPrism(groundCenter - groundSize / 2, groundCenter + groundSize / 2, plotOptions);
     
     % Create R1 and R2
-    r1 = UR3;
+    r1 = LA2.robot1;
     r1BaseTransform = transl(0,0, 0.5);
     r1.model.base = r1BaseTransform;
     r1.model.plot(zeros(1, r1.model.n))
     
-    r2 = KinovaLink6;    
+    r2 = LA2.robot2;  
     r2BaseTransform = transl(-2.25, -1.5, 0.6)* trotz(pi/2  );
     r2.model.base = r2BaseTransform;    
     r2.model.plot(zeros(1, r2.model.n))
@@ -129,10 +133,11 @@ end
 
 %% Activate R1
 function R1()
-    q0 = [0,0,0,deg2rad(-90), deg2rad(-90),0]; % Starting pose
-    q1 = [0,0,deg2rad(5),deg2rad(-90), deg2rad(-90),0]; % Picks up phone
-    q2 = [deg2rad(200), 0, 0, deg2rad(-90), deg2rad(-90), 0]; % Final pose/ drops phone 
-    q3 = [deg2rad(200), 0,deg2rad(5) , deg2rad(-90), deg2rad(-90), 0]; % Picks up phone
+    r1 = LA2.robot1;
+    q0 = LA2.q0;
+    q1 = LA2.q1;
+    q2 = LA2.q2;
+    q3 = LA2.q3;
     
     stepsMini = 25;
     stepsR1 = 100;  % Number of steps
@@ -281,6 +286,7 @@ function R1()
 end 
 %% Activate & Animate R2
 function R2()
+    r2 = LA2.robot2;
     % Define start and target poses (both position and orientation)
     targetPose = transl(-2.25, -1, 0.8) * trotx(pi); % Target pose with orientation
     
@@ -311,10 +317,11 @@ function R2()
 end
 %% Collision Detection
 function CollisionDetect()
-    q0 = [0,0,0,deg2rad(-90), deg2rad(-90),0]; % Starting pose
-    % q1 = [0,0,deg2rad(5),deg2rad(-90), deg2rad(-90),0]; % Picks up phone
-    % q2 = [deg2rad(200), 0, 0, deg2rad(-90), deg2rad(-90), 0]; % Final pose/ drops phone 
-    q3 = [deg2rad(200), 0,deg2rad(5) , deg2rad(-90), deg2rad(-90), 0]; % Picks up phone
+    r1 = LA2.robot1; 
+    q0 = LA2.q0;
+    % q1 = LA2.q1;
+    % q2 = LA2.q2;
+    q3 = LA2.q3;
     
     % q0 = [0,deg2rad(45),0,deg2rad(-90), deg2rad(-90),0]; % Ground CD
     q = zeros(1,6);  
@@ -347,6 +354,11 @@ end
 
 %% Collision Avoidance 
 function CollisionAvoid()
+    r1 = LA2.robot1; 
+    q0 = LA2.q0;
+    % q1 = LA2.q1;
+    % q2 = LA2.q2;
+    q3 = LA2.q3;
     qWaypoints = [q3;q0];
     isCollision = true;
     checkedTillWaypoint = 1;
