@@ -10,6 +10,7 @@ classdef LA2 <handle
         q3 = [deg2rad(200), 0,deg2rad(5) , deg2rad(-90), deg2rad(-90), 0]; % Picks up phone
    end
 
+
    methods
        function self = LA2()
             cla;
@@ -26,15 +27,14 @@ classdef LA2 <handle
 %% Environmental & Robots setup
      function Setup()      
         hold on
-        axis equal
-        view(3);
+        axis ([-4 4 -4 6 -2 4]);
         
-        
-        surf([-4,-4;4,4] ...
-        ,[-4,4;-4,4] ...
+       surf([-4,-4;4,4] ...
+        ,[-4,5;-4,5] ...
         ,[0.01,0.01;0.01,0.01] ...
         ,'CData',imread('concrete.jpg') ...
         ,'FaceColor','texturemap')
+
     
         % Safety Features 
         barriers =[];
@@ -99,7 +99,7 @@ classdef LA2 <handle
         % Collision objects 
         centerpnt = [0,-1.5,0];
         side = 2;
-        plotOptions.plotFaces = true; % Set this to false to hide cube from plot
+        plotOptions.plotFaces = false; % Set this to false to hide cube from plot
         
         [vertex,faces,faceNormals] = RectangularPrism(centerpnt-side/2, centerpnt+side/2,plotOptions);
         
@@ -120,24 +120,29 @@ classdef LA2 <handle
         r2.model.plot(zeros(1, r2.model.n))
     
             
-        % Create Phone 
-        phoneInitPos = [-0.46,-0.19,0.5];
-        phoneFinalPos = [0.46,-0.19,0.5];
-        scaledFacPhone= 0.01;
-        
-        phone= PlaceObject('Phone.ply', [phoneInitPos(1)/scaledFacPhone,phoneInitPos(2)/scaledFacPhone,phoneInitPos(3)/scaledFacPhone]);
-        scaledVerticesPhone = get(phone, 'Vertices') * scaledFacPhone;
-        set(phone, 'Vertices', scaledVerticesPhone);
        end
 
 %% Activate R1
        function R1()
+        % Create Phone 
+        phoneInitPos = LA2.phoneInitPos;
+        phoneFinalPos = LA2.phoneFinalPos;
+        scaledFacPhone= 0.01;
+        phone = PlaceObject('Phone.ply', [phoneInitPos(1)/scaledFacPhone,phoneInitPos(2)/scaledFacPhone,phoneInitPos(3)/scaledFacPhone]);
+        scaledVerticesPhone = get(phone, 'Vertices') * scaledFacPhone;
+        set(phone, 'Vertices', scaledVerticesPhone);
+
         r1 = LA2.robot1;
+        r1BaseTransform = transl(0,0, 0.5);
+        r1.model.base = r1BaseTransform;
+        r1.model.plot(zeros(1, r1.model.n))
         q0 = LA2.q0;
         q1 = LA2.q1;
         q2 = LA2.q2;
         q3 = LA2.q3;
         
+        phoneInitPos = LA2.phoneInitPos;
+        phoneFinalPos = LA2.phoneFinalPos;
         stepsMini = 25;
         stepsR1 = 100;  % Number of steps
         deltaT = 0.05;  % Time step
@@ -249,8 +254,8 @@ classdef LA2 <handle
                     currentPos_R1(3) = currentPos_R1(3) - robotPhoneOffset;
                     phonePosUpdated = currentPos_R1';
                     delete(phone); 
-                    phone = PlaceObject('phone.ply', [phonePosUpdated(1)/scaledFac,phonePosUpdated(2)/scaledFac,phonePosUpdated(3)/scaledFac]);
-                    scaledVerticesPhone = get(phone, 'Vertices') * scaledFac;
+                    phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,phonePosUpdated(3)/0.01]);
+                    scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
                     set(phone, 'Vertices', scaledVerticesPhone);
                 end
             
@@ -277,8 +282,8 @@ classdef LA2 <handle
                 currentPos_R1(3) = currentPos_R1(3) - robotPhoneOffset;
                 phonePosUpdated = currentPos_R1';
                 delete(phone); 
-                phone = PlaceObject('phone.ply', [phonePosUpdated(1)/scaledFac,phonePosUpdated(2)/scaledFac,phonePosUpdated(3)/scaledFac]);
-                scaledVerticesPhone = get(phone, 'Vertices') * scaledFac;
+                phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,phonePosUpdated(3)/0.01]);
+                scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
                 set(phone, 'Vertices', scaledVerticesPhone);
             end
             pause(0.5);
@@ -286,6 +291,9 @@ classdef LA2 <handle
 %% Activate & Animate R2
           function R2()
                 r2 = LA2.robot2;
+                r2BaseTransform = transl(-2.25, -1.5, 0.6)* trotz(pi/2  );
+                r2.model.base = r2BaseTransform;    
+                r2.model.plot(zeros(1, r2.model.n));
                 % Define start and target poses (both position and orientation)
                 targetPose = transl(-2.25, -1, 0.8) * trotx(pi); % Target pose with orientation
                 
@@ -317,12 +325,24 @@ classdef LA2 <handle
 %% Collision Detection
              function CollisionDetect()
                 r1 = LA2.robot1; 
+                r1BaseTransform = transl(0,0, 0.5);
+                r1.model.base = r1BaseTransform;
+                r1.model.plot(zeros(1, r1.model.n))
                 q0 = LA2.q0;
                 % q1 = LA2.q1;
                 % q2 = LA2.q2;
                 q3 = LA2.q3;
-                
                 % q0 = [0,deg2rad(45),0,deg2rad(-90), deg2rad(-90),0]; % Ground CD
+
+                centerpnt = [0,-1.5,0];
+                side = 2;
+                plotOptions.plotFaces = false; % Set this to false to hide cube from plot
+                [vertex,faces,faceNormals] = RectangularPrism(centerpnt-side/2, centerpnt+side/2,plotOptions);
+                groundCenter = [0, 0, 0.25];  % Center point of the cuboid
+                groundSize = [4, 4, 0.49];     % Ground dimensions (wide and thin)
+                plotOptions.plotFaces = false;
+                [groundVertex, groundFaces, groundFaceNormals] = RectangularPrism(groundCenter - groundSize / 2, groundCenter + groundSize / 2, plotOptions);
+
                 q = zeros(1,6);  
                 
                 tr1 = zeros(4,4,r1.model.n+1);
@@ -353,11 +373,24 @@ classdef LA2 <handle
 
 %% Collision Avoidance 
              function CollisionAvoid()
-                r1 = LA2.robot1; 
+                r1 = LA2.robot1;
+                r1BaseTransform = transl(0,0, 0.5);
+                r1.model.base = r1BaseTransform;
+                r1.model.plot(zeros(1, r1.model.n))
                 q0 = LA2.q0;
                 % q1 = LA2.q1;
                 % q2 = LA2.q2;
                 q3 = LA2.q3;
+
+                centerpnt = [0,-1.5,0];
+                side = 2;
+                plotOptions.plotFaces = false; % Set this to false to hide cube from plot
+                [vertex,faces,faceNormals] = RectangularPrism(centerpnt-side/2, centerpnt+side/2,plotOptions);
+                groundCenter = [0, 0, 0.25];  % Center point of the cuboid
+                groundSize = [4, 4, 0.49];     % Ground dimensions (wide and thin)
+                plotOptions.plotFaces = false;
+                [groundVertex, groundFaces, groundFaceNormals] = RectangularPrism(groundCenter - groundSize / 2, groundCenter + groundSize / 2, plotOptions);
+
                 qWaypoints = [q3;q0];
                 isCollision = true;
                 checkedTillWaypoint = 1;
