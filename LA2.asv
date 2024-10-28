@@ -27,14 +27,13 @@ function Setup()
     axis equal
     view(3);
     
-    
+    % Environment & Safety Features 
     surf([-4,-4;4,4] ...
     ,[-4,4;-4,4] ...
     ,[0.01,0.01;0.01,0.01] ...
     ,'CData',imread('concrete.jpg') ...
     ,'FaceColor','texturemap')
-
-    % Safety Features 
+    
     barriers =[];
     barriers(1) = PlaceObject('barrier1.5x0.2x1m.ply', [0,1,0]);
     barriers(2) = PlaceObject('barrier1.5x0.2x1m.ply', [0,1,0]);
@@ -53,17 +52,20 @@ function Setup()
      set(barriers(i), 'Parent', tform);
     end 
     
+    
     fireEx = PlaceObject('fireExtinguisherElevated.ply', [-0.5,2.5,1]);
     scaleFactor = 2;  
     scaledVertices = get(fireEx, 'Vertices') * scaleFactor;
     set(fireEx, 'Vertices', scaledVertices);
-
+    
     emergButton = PlaceObject('emergencyStopWallMounted.ply', [-0.25,-1.25,0.5]);
     emerRot= pi;
     tform = hgtransform;
     R_emer = makehgtform('zrotate', emerRot,'scale', 4);
     set(tform, 'Matrix', R_emer);
     set(emergButton, 'Parent', tform);
+    
+    
     
     % Tables 
     tableR1  = PlaceObject('tableBrown2.1x1.4x0.5m.ply',[0,0.3,0]);
@@ -87,12 +89,12 @@ function Setup()
     set(tform, 'Matrix', R_me);
     set(me, 'Parent', tform);
 
-    personWatch = PlaceObject('personMaleConstruction.ply', [-4.8,0,0]);
-    personWatchRot = -pi/2;
+    person2 = PlaceObject('personMaleConstruction.ply', [-4.8,0,0]);
+    personRot = -pi/2;
     tform = hgtransform;
-    R_person = makehgtform('zrotate', personWatchRot,'scale', 1);
+    R_person = makehgtform('zrotate', personRot,'scale', 1);
     set(tform, 'Matrix', R_person);
-    set(personWatch, 'Parent', tform);
+    set(person2, 'Parent', tform);
     
     % Collision objects 
     centerpnt = [0,-1.5,0];
@@ -105,6 +107,8 @@ function Setup()
     groundSize = [4, 4, 0.49];     % Ground dimensions (wide and thin)
     plotOptions.plotFaces = false;
     [groundVertex, groundFaces, groundFaceNormals] = RectangularPrism(groundCenter - groundSize / 2, groundCenter + groundSize / 2, plotOptions);
+    
+
     
     % Create R1 and R2
     r1 = UR3;
@@ -128,7 +132,7 @@ function Setup()
     set(phone, 'Vertices', scaledVerticesPhone);
 end
 
-%% Activate R1
+%% Activate & Animate R1
 function R1()
     q0 = [0,0,0,deg2rad(-90), deg2rad(-90),0]; % Starting pose
     q1 = [0,0,deg2rad(5),deg2rad(-90), deg2rad(-90),0]; % Picks up phone
@@ -309,78 +313,5 @@ function R2()
             r2.model.animate(qTrajectory(i, :));
         end
     end
-end
-%% Collision Detection
-function CollisionDetect()
-    q0 = [0,0,0,deg2rad(-90), deg2rad(-90),0]; % Starting pose
-    % q1 = [0,0,deg2rad(5),deg2rad(-90), deg2rad(-90),0]; % Picks up phone
-    % q2 = [deg2rad(200), 0, 0, deg2rad(-90), deg2rad(-90), 0]; % Final pose/ drops phone 
-    q3 = [deg2rad(200), 0,deg2rad(5) , deg2rad(-90), deg2rad(-90), 0]; % Picks up phone
-    
-    % q0 = [0,deg2rad(45),0,deg2rad(-90), deg2rad(-90),0]; % Ground CD
-    q = zeros(1,6);  
-    
-    tr1 = zeros(4,4,r1.model.n+1);
-    tr1(:,:,1) = r1.model.base;
-    L = r1.model.links;
-    for i = 1 : r1.model.n
-        tr1(:,:,i+1) = tr1(:,:,i) * trotz(q(i)+L(i).offset) * transl(0,0,L(i).d) * transl(L(i).a,0,0) * trotx(L(i).alpha);
-    end
-    
-    steps = 2;
-    while ~isempty(find(1 < abs(diff(rad2deg(jtraj(q3,q0,steps)))),1))
-        steps = steps + 1;
-    end
-    qMatrixCD = jtraj(q3,q0,steps);
-    
-    result = true(steps,1);
-    for i = 1: steps
-        result(i) = IsCollision(r1.model,true, qMatrixCD(i,:),faces,vertex,faceNormals,false, groundVertex, groundFaces, groundFaceNormals);
-        r1.model.animate(qMatrixCD(i,:));
-    end
-    figure;
-    plot(1:steps, result, 'r-o', 'LineWidth', 2, 'MarkerSize', 5);
-    xlabel('Step Number');
-    ylabel('Collision Detected (1 = Yes, 0 = No)');
-    title('Collision Detection Over Robot Path');
-    grid on;
-end
-
-%% Collision Avoidance 
-function CollisionAvoid()
-    qWaypoints = [q3;q0];
-    isCollision = true;
-    checkedTillWaypoint = 1;
-    qMatrixCA = [];
-    while (isCollision)
-        startWaypoint = checkedTillWaypoint;
-        for i = startWaypoint:size(qWaypoints,1)-1
-            qMatrixJoin = InterpolateWaypointRadians(qWaypoints(i:i+1,:),deg2rad(10));
-            if ~IsCollision(r1.model,false, qMatrixJoin,faces,vertex,faceNormals, false, groundVertex, groundFaces, groundFaceNormals)
-                qMatrixCA = [qMatrixCA; qMatrixJoin]; %#ok<AGROW> 
-                isCollision = false;
-                checkedTillWaypoint = i+1;
-                % Try and join to the final goal (q0)
-                qMatrixJoin = InterpolateWaypointRadians([qMatrixCA(end,:); q0],deg2rad(10));
-                if ~IsCollision(r1.model,false, qMatrixJoin,faces,vertex,faceNormals,false, groundVertex, groundFaces, groundFaceNormals)
-                    qMatrixCA = [qMatrixCA;qMatrixJoin];
-                    % Reached goal without collision, so break out
-                    break;
-                end
-            else
-                % Randomly pick a pose that is not in collision
-                qRand = (2 * rand(1,6) - 1) * pi;
-                while IsCollision(r1.model,false,qRand,faces,vertex,faceNormals, false, groundVertex, groundFaces, groundFaceNormals)
-                    qRand = (2 * rand(1,6) - 1) * pi;
-                end
-                qWaypoints =[ qWaypoints(1:i,:); qRand; qWaypoints(i+1:end,:)];
-                isCollision = true;
-                break;
-            end
-        end
-    end
-    r1.model.animate(qMatrixCA)
-    s = size(qMatrixCA,1);
-    fprintf('Number of steps: %d\n', s); 
 end
 
