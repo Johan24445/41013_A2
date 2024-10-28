@@ -20,7 +20,6 @@ classdef LA2 <handle
    end
 
    methods(Static)
-
 %% Environmental & Robots setup
 function Setup()      
     hold on
@@ -384,3 +383,5 @@ function CollisionAvoid()
     fprintf('Number of steps: %d\n', s); 
 end
 
+   end
+end
