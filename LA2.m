@@ -177,8 +177,7 @@ classdef LA2 <handle
                 qMatrix2(i, :) = (1 - scaled_t(i)) * q3 + scaled_t(i) * q0;
             end
         
-        
-                    % Animate the motion from q1 to q2
+              % Animate the motion from q1 to q2
                 isCollision = true;
                 qMatrix1CA = [];
                 checkedTillWaypoint = 1;
