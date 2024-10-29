@@ -42,8 +42,8 @@ classdef LA2 <handle
             self.prevButtonState = buttonPressed; % Update previous button state
        end
 
-        %% Activate R1
-       function R1(self)
+%% Activate and Animate R1
+        function R1()
         % Create Phone 
         phoneInitPos = LA2.phoneInitPos;
         phoneFinalPos = LA2.phoneFinalPos;
@@ -60,9 +60,16 @@ classdef LA2 <handle
         q1 = LA2.q1;
         q2 = LA2.q2;
         q3 = LA2.q3;
+
+        centerpnt = [0,-1.5,0];
+        side = 2;
+        plotOptions.plotFaces = false; % Set this to false to hide cube from plot
+        [vertex,faces,faceNormals] = RectangularPrism(centerpnt-side/2, centerpnt+side/2,plotOptions);
+        groundCenter = [0, 0, 0.25];  % Center point of the cuboid
+        groundSize = [4, 4, 0.49];     % Ground dimensions (wide and thin)
+        plotOptions.plotFaces = false;
+        [groundVertex, groundFaces, groundFaceNormals] = RectangularPrism(groundCenter - groundSize / 2, groundCenter + groundSize / 2, plotOptions);
         
-        phoneInitPos = LA2.phoneInitPos;
-        phoneFinalPos = LA2.phoneFinalPos;
         stepsMini = 25;
         stepsR1 = 100;  % Number of steps
         deltaT = 0.05;  % Time step
@@ -161,75 +168,87 @@ classdef LA2 <handle
                 qMatrix1(i+1,:) = qMatrix1(i,:) + deltaT * qdot(i,:);  % Next joint configuration
                 positionError(:,i) = deltaX;                               
                 angleError(:,i) = deltaTheta;  
+
+
             end
-        
-        
-                    % Animate the motion from q1 to q2
-                for i = 1:stepsR1
-                    self.checkEStop();
-                    if self.estopFlag
-                        disp('E-Stop activated for R1. Pausing...');
-                        self.qCurrentR1 = qMatrix1(i, :);
-                        while self.estopFlag    
-                            self.checkEStop();  % Keep checking until released
-                            pause(0.1);
-                        end
-                        disp('Resuming R1 from E-Stop position.');
-                    end
-                    r1.model.animate(qMatrix1(i, :));  % Animate robot
-                    drawnow();
-                    currentQ_R1 = qMatrix1(i, :);
-                    currentPos_R1 = r1.model.fkine(currentQ_R1).T; % End effector pose of robot during motion
-                    currentPos_R1 = currentPos_R1(1:3, 4);
-                    currentPos_R1(3) = currentPos_R1(3) - robotPhoneOffset;
-                    phonePosUpdated = currentPos_R1';
-                    delete(phone); 
-                    phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,phonePosUpdated(3)/0.01]);
-                    scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
-                    set(phone, 'Vertices', scaledVerticesPhone);
-                end
-            
-                pause(0.5);
-            
-                 % Pick phone and return (q3->q0)
-            r1.model.animate(qMat2)
-            drawnow();
-            
-            % Precompute the trajectory using the scaled time
+
+             % Precompute the trajectory using the scaled time
             qMatrix2 =zeros(stepsR1, length(q3));
             for i = 1:stepsR1
                 % Interpolate joint space positions based on scaled time
                 qMatrix2(i, :) = (1 - scaled_t(i)) * q3 + scaled_t(i) * q0;
             end
-            
-            % Animate motion
-            for i = 1:stepsR1
-                self.checkEStop();
-                if self.estopFlag
-                    disp('E-Stop activated for R1. Pausing...');
-                    self.qCurrentR1 = qMatrix2(i, :);
-                    while self.estopFlag
-                        self.checkEStop();
-                        pause(0.1);
+        
+        
+                    % Animate the motion from q1 to q2
+                isCollision = true;
+                qMatrix1CA = [];
+                checkedTillWaypoint = 1;
+                while (isCollision)
+                    startWaypoint = checkedTillWaypoint;
+                    for i = startWaypoint:size(qMatrix1,1)-1
+                        qMatrixJoin = InterpolateWaypointRadians(qMatrix1(i:i+1,:),deg2rad(2));
+                        if ~IsCollision(r1.model,false, qMatrixJoin,faces,vertex,faceNormals, false, groundVertex, groundFaces, groundFaceNormals)
+                            qMatrix1CA = [qMatrix1CA; qMatrixJoin]; %#ok<AGROW> 
+                            isCollision = false;
+                            checkedTillWaypoint = i+1;
+                            % Try and join to the final goal (q0)
+                            qMatrixJoin = InterpolateWaypointRadians([qMatrix1CA(end,:); qMatrix1(end,:)],deg2rad(2));
+                            if ~IsCollision(r1.model,false, qMatrixJoin,faces,vertex,faceNormals,false, groundVertex, groundFaces, groundFaceNormals)
+                                qMatrix1CA = [qMatrix1CA;qMatrixJoin];
+                                % Reached goal without collision, so break out
+                                break;
+                            end
+                        else
+                            % Randomly pick a pose that is not in collision
+                            qRand = (2 * rand(1,6) - 1) * pi;
+                            while IsCollision(r1.model,false,qRand,faces,vertex,faceNormals, false, groundVertex, groundFaces, groundFaceNormals)
+                                qRand = (2 * rand(1,6) - 1) * pi;
+                            end
+                            qMatrix1 =[ qMatrix1(1:i,:); qRand; qMatrix1(i+1:end,:)];
+                            isCollision = true;
+                            break;
+                        end
                     end
-                    disp('Resuming R1 from E-Stop position.');
                 end
+                        
+            for i = 1:size(qMatrix1,1)
+                r1.model.animate(qMatrix1CA(i, :));  % Animate robot
+                drawnow();
+                currentQ_R1 = qMatrix1CA(i, :);
+                currentPos_R1 = r1.model.fkine(currentQ_R1).T; % End effector pose of robot during motion
+                currentPos_R1 = currentPos_R1(1:3, 4);
+                currentPos_R1(3) = currentPos_R1(3) - robotPhoneOffset;
+                phonePosUpdated = currentPos_R1';
+                delete(phone); 
+                phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,phonePosUpdated(3)/0.01]);
+                scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
+                set(phone, 'Vertices', scaledVerticesPhone);
+            end
+            
+                pause(0.5);
+            
+            % Picks phone (q2 to q3)
+            r1.model.animate(qMat2)
+            drawnow();
+            
+            
+            % Animate motion from q3 to q0
+            for i = 1:stepsR1
                 r1.model.animate(qMatrix2(i, :));
                 drawnow();
-                
                 currentQ_R1 = qMatrix2(i, :);
                 currentPos_R1 = r1.model.fkine(currentQ_R1).T; % End effector pose of robot during motion
                 currentPos_R1 = currentPos_R1(1:3, 4);
                 currentPos_R1(3) = currentPos_R1(3) - robotPhoneOffset;
                 phonePosUpdated = currentPos_R1';
-                
                 delete(phone); 
-                phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01, phonePosUpdated(2)/0.01, phonePosUpdated(3)/0.01]);
+                phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,phonePosUpdated(3)/0.01]);
                 scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
                 set(phone, 'Vertices', scaledVerticesPhone);
             end
             pause(0.5);
-       end
+          end 
 %% Activate & Animate R2
           function R2(self)
            r2 = LA2.robot2;
