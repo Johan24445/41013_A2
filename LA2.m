@@ -19,7 +19,6 @@ classdef LA2 <handle
        prevButtonState = false;    % Track previous button state for toggle functionality
    end
 
-
    methods
        function self = LA2()
             % cla;
@@ -30,109 +29,9 @@ classdef LA2 <handle
 			self.R1();
             self.R2();
  
-        end
-   end
-
-   methods(Static)
-%% Environmental & Robots setup
-     function Setup()      
-        hold on
-        axis ([-4 4 -4 6 -2 4]);
-        
-       surf([-4,-4;4,4] ...
-        ,[-4,6;-4,6] ...
-        ,[0.01,0.01;0.01,0.01] ...
-        ,'CData',imread('concrete.jpg') ...
-        ,'FaceColor','texturemap')
-
-    
-        % Safety Features 
-        barriers =[];
-        barriers(1) = PlaceObject('barrier1.5x0.2x1m.ply', [0,1,0]);
-        barriers(2) = PlaceObject('barrier1.5x0.2x1m.ply', [0,1,0]);
-        barriers(3) = PlaceObject('barrier1.5x0.2x1m.ply', [0,1,0]);
-        barriers(4) = PlaceObject('barrier1.5x0.2x1m.ply', [0,1.1,0]);
-        
-        thetaRotBarrier = [];
-        thetaRotBarrier(1)= -pi/2;
-        thetaRotBarrier(2)= pi;
-        thetaRotBarrier(3)= 0;
-        thetaRotBarrier(4) = pi/2;
-        for i =1:length(barriers)
-         tform = hgtransform;
-         Rz = makehgtform('zrotate', thetaRotBarrier(i),'scale', 3);
-         set(tform, 'Matrix', Rz);
-         set(barriers(i), 'Parent', tform);
-        end 
-        
-        fireEx = PlaceObject('fireExtinguisherElevated.ply', [-0.5,2.5,1]);
-        scaleFactor = 2;  
-        scaledVertices = get(fireEx, 'Vertices') * scaleFactor;
-        set(fireEx, 'Vertices', scaledVertices);
-    
-        emergButton = PlaceObject('emergencyStopWallMounted.ply', [-0.25,-1.25,0.5]);
-        emerRot= pi;
-        tform = hgtransform;
-        R_emer = makehgtform('zrotate', emerRot,'scale', 4);
-        set(tform, 'Matrix', R_emer);
-        set(emergButton, 'Parent', tform);
-        
-        % Tables 
-        tableR1  = PlaceObject('tableBrown2.1x1.4x0.5m.ply',[0,0.3,0]);
-        tableBed  = PlaceObject('tableBrown2.1x1.4x0.5m.ply', [0,2,0]);
-        tableR2 = PlaceObject('tableRound0.3x0.3x0.3m.ply', [-0.6,-0.55,-0.1]);
-        
-        tableMainRot = pi/2;
-        tform = hgtransform;
-        R_person = makehgtform('zrotate', tableMainRot,'scale', 1);
-        set(tform, 'Matrix', R_person);
-        set(tableBed, 'Parent', tform);
-        scaleFactor = 3;  
-        scaledVertices = get(tableR2, 'Vertices') * scaleFactor;
-        set(tableR2, 'Vertices', scaledVertices);
-        
-        % People 
-        me = PlaceObject('personMaleOld.ply',[-2,-0.35,-1.2]);
-        meRot = deg2rad(-100);
-        tform = hgtransform;
-        R_me = makehgtform('xrotate', meRot,'scale', 1);
-        set(tform, 'Matrix', R_me);
-        set(me, 'Parent', tform);
-    
-        personWatch = PlaceObject('personMaleConstruction.ply', [-4.8,0,0]);
-        personWatchRot = -pi/2;
-        tform = hgtransform;
-        R_person = makehgtform('zrotate', personWatchRot,'scale', 1);
-        set(tform, 'Matrix', R_person);
-        set(personWatch, 'Parent', tform);
-        
-        % Collision objects 
-        centerpnt = [0,-1.5,0];
-        side = 2;
-        plotOptions.plotFaces = true; % Set this to false to hide cube from plot
-        
-        [vertex,faces,faceNormals] = RectangularPrism(centerpnt-side/2, centerpnt+side/2,plotOptions);
-        
-        groundCenter = [0, 0, 0.25];  % Center point of the cuboid
-        groundSize = [4, 4, 0.49];     % Ground dimensions (wide and thin)
-        plotOptions.plotFaces = false;
-        [groundVertex, groundFaces, groundFaceNormals] = RectangularPrism(groundCenter - groundSize / 2, groundCenter + groundSize / 2, plotOptions);
-        
-        % Create R1 and R2
-        r1 = LA2.robot1;
-        r1BaseTransform = transl(0,0, 0.5);
-        r1.model.base = r1BaseTransform;
-        r1.model.plot(zeros(1, r1.model.n))
-        plotOptions.plotFaces = true;
-        
-        r2 = LA2.robot2;  
-        r2BaseTransform = transl(-2.25, -1.5, 0.6)* trotz(pi/2  );
-        r2.model.base = r2BaseTransform;    
-        r2.model.plot(zeros(1, r2.model.n))
-        plotOptions.plotFaces = true;
-   
        end
-
+       
+       %% E-Stop
        function checkEStop(self)
             % Toggle estopFlag only when button is pressed and released
             buttonPressed = button(self.joystick, self.buttonIndex);
@@ -143,7 +42,7 @@ classdef LA2 <handle
             self.prevButtonState = buttonPressed; % Update previous button state
        end
 
-       %% Activate R1
+        %% Activate R1
        function R1(self)
         % Create Phone 
         phoneInitPos = LA2.phoneInitPos;
