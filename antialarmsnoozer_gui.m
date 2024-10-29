@@ -238,6 +238,5 @@ end
 
 function playAction(robotInstance)
     robotInstance.R1();
-    pause(1);
     robotInstance.R2();
 end
