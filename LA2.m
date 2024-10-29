@@ -25,7 +25,7 @@ classdef LA2 <handle
             % clc;
 			% input('Press enter to begin')
             self.Setup();
-            self.joystick = vrjoystick(1); % Initialize joystick (controller #1)
+            % self.joystick = vrjoystick(1); % Initialize joystick (controller #1)
 			self.R1();
             self.R2();
  
@@ -43,7 +43,7 @@ classdef LA2 <handle
        end
 
 %% Activate and Animate R1
-        function R1()
+        function R1(self)
         % Create Phone 
         phoneInitPos = LA2.phoneInitPos;
         phoneFinalPos = LA2.phoneFinalPos;
@@ -81,7 +81,7 @@ classdef LA2 <handle
         drawnow();
         
         % Phone handles 
-        robotPhoneOffset = 0.07;
+        robotPhoneOffset = 0.00;
         tPhoneStart = transl(phoneInitPos(1),phoneInitPos(2),phoneInitPos(3)+robotPhoneOffset);
         tPhoneEnd = transl(phoneFinalPos(1),phoneFinalPos(2),phoneFinalPos(3)+robotPhoneOffset);
         
@@ -225,7 +225,10 @@ classdef LA2 <handle
                 scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
                 set(phone, 'Vertices', scaledVerticesPhone);
             end
-            
+            delete(phone);
+            phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,(phonePosUpdated(3)-0.05)/0.01]);
+            scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
+            set(phone, 'Vertices', scaledVerticesPhone);
                 pause(0.5);
             
             % Picks phone (q2 to q3)
@@ -247,7 +250,13 @@ classdef LA2 <handle
                 scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
                 set(phone, 'Vertices', scaledVerticesPhone);
             end
+            % Phone drops
+            delete(phone);
+            phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,(phonePosUpdated(3)-0.05)/0.01]);
+            scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
+            set(phone, 'Vertices', scaledVerticesPhone);
             pause(0.5);
+            
           end 
 %% Activate & Animate R2
           function R2(self)
@@ -299,7 +308,7 @@ classdef LA2 <handle
 %% Environmental & Robots setup
      function Setup()      
         hold on
-        axis ([-4 4 -4 6 -2 4]);
+        axis ([-4 4 -4 6 0 4]);
         
        surf([-4,-4;4,4] ...
         ,[-4,6;-4,6] ...
@@ -371,7 +380,7 @@ classdef LA2 <handle
         % Collision objects 
         centerpnt = [0,-1.5,0];
         side = 2;
-        plotOptions.plotFaces = true; % Set this to false to hide cube from plot
+        plotOptions.plotFaces = false; % Set this to false to hide cube from plot
         
         [vertex,faces,faceNormals] = RectangularPrism(centerpnt-side/2, centerpnt+side/2,plotOptions);
         
@@ -407,7 +416,7 @@ classdef LA2 <handle
 
                 centerpnt = [0,-1.5,0];
                 side = 2;
-                plotOptions.plotFaces = false; % Set this to false to hide cube from plot
+                plotOptions.plotFaces = true; % Set this to false to hide cube from plot
                 [vertex,faces,faceNormals] = RectangularPrism(centerpnt-side/2, centerpnt+side/2,plotOptions);
                 groundCenter = [0, 0, 0.25];  % Center point of the cuboid
                 groundSize = [4, 4, 0.49];     % Ground dimensions (wide and thin)
@@ -455,7 +464,7 @@ classdef LA2 <handle
 
                 centerpnt = [0,-1.5,0];
                 side = 2;
-                plotOptions.plotFaces = false; % Set this to false to hide cube from plot
+                plotOptions.plotFaces = true; % Set this to false to hide cube from plot
                 [vertex,faces,faceNormals] = RectangularPrism(centerpnt-side/2, centerpnt+side/2,plotOptions);
                 groundCenter = [0, 0, 0.25];  % Center point of the cuboid
                 groundSize = [4, 4, 0.49];     % Ground dimensions (wide and thin)
