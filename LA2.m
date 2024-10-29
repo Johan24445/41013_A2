@@ -168,8 +168,6 @@ classdef LA2 <handle
                 qMatrix1(i+1,:) = qMatrix1(i,:) + deltaT * qdot(i,:);  % Next joint configuration
                 positionError(:,i) = deltaX;                               
                 angleError(:,i) = deltaTheta;  
-
-
             end
 
              % Precompute the trajectory using the scaled time
