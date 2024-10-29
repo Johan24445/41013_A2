@@ -10,6 +10,15 @@ classdef LA2 <handle
         q3 = [deg2rad(200), 0,deg2rad(5) , deg2rad(-90), deg2rad(-90), 0]; % Picks up phone
    end
 
+  properties
+       estopFlag = false;          % E-Stop flag
+       qCurrentR1 = [];            % Store current joint config of R1 during E-Stop
+       qCurrentR2 = [];            % Store current joint config of R2 during E-Stop
+       joystick;                   % Game controller handle
+       buttonIndex = 1;            % Button index for E-Stop (adjust based on controller)
+       prevButtonState = false;    % Track previous button state for toggle functionality
+   end
+
 
    methods
        function self = LA2()
@@ -17,115 +26,24 @@ classdef LA2 <handle
             % clc;
 			% input('Press enter to begin')
             self.Setup();
+            self.joystick = vrjoystick(1); % Initialize joystick (controller #1)
 			self.R1();
             self.R2();
  
-        end
-   end
-
-   methods(Static)
-%% Environmental & Robots setup
-     function Setup()      
-        hold on
-        axis ([-4 4 -4 6 -2 4]);
-        
-       surf([-4,-4;4,4] ...
-        ,[-4,6;-4,6] ...
-        ,[0.01,0.01;0.01,0.01] ...
-        ,'CData',imread('concrete.jpg') ...
-        ,'FaceColor','texturemap')
-
-    
-        % Safety Features 
-        barriers =[];
-        barriers(1) = PlaceObject('barrier1.5x0.2x1m.ply', [0,1,0]);
-        barriers(2) = PlaceObject('barrier1.5x0.2x1m.ply', [0,1,0]);
-        barriers(3) = PlaceObject('barrier1.5x0.2x1m.ply', [0,1,0]);
-        barriers(4) = PlaceObject('barrier1.5x0.2x1m.ply', [0,1.1,0]);
-        
-        thetaRotBarrier = [];
-        thetaRotBarrier(1)= -pi/2;
-        thetaRotBarrier(2)= pi;
-        thetaRotBarrier(3)= 0;
-        thetaRotBarrier(4) = pi/2;
-        for i =1:length(barriers)
-         tform = hgtransform;
-         Rz = makehgtform('zrotate', thetaRotBarrier(i),'scale', 3);
-         set(tform, 'Matrix', Rz);
-         set(barriers(i), 'Parent', tform);
-        end 
-        
-        fireEx = PlaceObject('fireExtinguisherElevated.ply', [-0.5,2.5,1]);
-        scaleFactor = 2;  
-        scaledVertices = get(fireEx, 'Vertices') * scaleFactor;
-        set(fireEx, 'Vertices', scaledVertices);
-    
-        emergButton = PlaceObject('emergencyStopWallMounted.ply', [-0.25,-1.25,0.5]);
-        emerRot= pi;
-        tform = hgtransform;
-        R_emer = makehgtform('zrotate', emerRot,'scale', 4);
-        set(tform, 'Matrix', R_emer);
-        set(emergButton, 'Parent', tform);
-        
-        % Tables 
-        tableR1  = PlaceObject('tableBrown2.1x1.4x0.5m.ply',[0,0.3,0]);
-        tableBed  = PlaceObject('tableBrown2.1x1.4x0.5m.ply', [0,2,0]);
-        tableR2 = PlaceObject('tableRound0.3x0.3x0.3m.ply', [-0.6,-0.55,-0.1]);
-        
-        tableMainRot = pi/2;
-        tform = hgtransform;
-        R_person = makehgtform('zrotate', tableMainRot,'scale', 1);
-        set(tform, 'Matrix', R_person);
-        set(tableBed, 'Parent', tform);
-        scaleFactor = 3;  
-        scaledVertices = get(tableR2, 'Vertices') * scaleFactor;
-        set(tableR2, 'Vertices', scaledVertices);
-        
-        % People 
-        me = PlaceObject('personMaleOld.ply',[-2,-0.35,-1.2]);
-        meRot = deg2rad(-100);
-        tform = hgtransform;
-        R_me = makehgtform('xrotate', meRot,'scale', 1);
-        set(tform, 'Matrix', R_me);
-        set(me, 'Parent', tform);
-    
-        personWatch = PlaceObject('personMaleConstruction.ply', [-4.8,0,0]);
-        personWatchRot = -pi/2;
-        tform = hgtransform;
-        R_person = makehgtform('zrotate', personWatchRot,'scale', 1);
-        set(tform, 'Matrix', R_person);
-        set(personWatch, 'Parent', tform);
-        
-        % Collision objects 
-        centerpnt = [0,-1.5,0];
-        side = 2;
-        plotOptions.plotFaces = true; % Set this to false to hide cube from plot
-        
-        [vertex,faces,faceNormals] = RectangularPrism(centerpnt-side/2, centerpnt+side/2,plotOptions);
-        
-        groundCenter = [0, 0, 0.25];  % Center point of the cuboid
-        groundSize = [4, 4, 0.49];     % Ground dimensions (wide and thin)
-        plotOptions.plotFaces = false;
-        [groundVertex, groundFaces, groundFaceNormals] = RectangularPrism(groundCenter - groundSize / 2, groundCenter + groundSize / 2, plotOptions);
-        
-        % Create R1 and R2
-        r1 = LA2.robot1;
-        r1BaseTransform = transl(0,0, 0.5);
-        r1.model.base = r1BaseTransform;
-        r1.model.plot(zeros(1, r1.model.n))
-        plotOptions.plotFaces = true;
-        
-        r2 = LA2.robot2;  
-        r2BaseTransform = transl(-2.25, -1.5, 0.6)* trotz(pi/2  );
-        r2.model.base = r2BaseTransform;    
-        r2.model.plot(zeros(1, r2.model.n))
-        plotOptions.plotFaces = true;
-    
-            
        end
 
-%% Activate R1
-       function R1()
+       function checkEStop(self)
+            % Toggle estopFlag only when button is pressed and released
+            buttonPressed = button(self.joystick, self.buttonIndex);
+            if buttonPressed && ~self.prevButtonState
+                self.estopFlag = ~self.estopFlag; % Toggle E-Stop state
+                disp(['E-Stop is now ', num2str(self.estopFlag)]);
+            end
+            self.prevButtonState = buttonPressed; % Update previous button state
+       end
+
+       %% Activate R1
+       function R1(self)
         % Create Phone 
         phoneInitPos = LA2.phoneInitPos;
         phoneFinalPos = LA2.phoneFinalPos;
@@ -248,6 +166,16 @@ classdef LA2 <handle
         
                     % Animate the motion from q1 to q2
                 for i = 1:stepsR1
+                    self.checkEStop();
+                    if self.estopFlag
+                        disp('E-Stop activated for R1. Pausing...');
+                        self.qCurrentR1 = qMatrix1(i, :);
+                        while self.estopFlag    
+                            self.checkEStop();  % Keep checking until released
+                            pause(0.1);
+                        end
+                        disp('Resuming R1 from E-Stop position.');
+                    end
                     r1.model.animate(qMatrix1(i, :));  % Animate robot
                     drawnow();
                     currentQ_R1 = qMatrix1(i, :);
@@ -276,54 +204,176 @@ classdef LA2 <handle
             
             % Animate motion
             for i = 1:stepsR1
+                self.checkEStop();
+                if self.estopFlag
+                    disp('E-Stop activated for R1. Pausing...');
+                    self.qCurrentR1 = qMatrix2(i, :);
+                    while self.estopFlag
+                        self.checkEStop();
+                        pause(0.1);
+                    end
+                    disp('Resuming R1 from E-Stop position.');
+                end
                 r1.model.animate(qMatrix2(i, :));
                 drawnow();
+                
                 currentQ_R1 = qMatrix2(i, :);
                 currentPos_R1 = r1.model.fkine(currentQ_R1).T; % End effector pose of robot during motion
                 currentPos_R1 = currentPos_R1(1:3, 4);
                 currentPos_R1(3) = currentPos_R1(3) - robotPhoneOffset;
                 phonePosUpdated = currentPos_R1';
+                
                 delete(phone); 
-                phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,phonePosUpdated(3)/0.01]);
+                phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01, phonePosUpdated(2)/0.01, phonePosUpdated(3)/0.01]);
                 scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
                 set(phone, 'Vertices', scaledVerticesPhone);
             end
             pause(0.5);
-          end 
+       end
 %% Activate & Animate R2
-          function R2()
-                r2 = LA2.robot2;
-                r2BaseTransform = transl(-2.25, -1.5, 0.6)* trotz(pi/2  );
-                r2.model.base = r2BaseTransform;    
-                r2.model.plot(zeros(1, r2.model.n));
-                % Define start and target poses (both position and orientation)
-                targetPose = transl(-2.25, -1, 0.8) * trotx(pi); % Target pose with orientation
-                
-                % Get the current joint configuration using getpos()
-                qStart = r2.model.getpos(); % Get current joint angles
-                
-                % Use inverse kinematics to find the target joint angles
-                qTarget = r2.model.ikcon(targetPose, qStart); % Target joint config
-                
-                % Set the number of steps for the trajectory
-                numSteps = 25;
-                
-                % Generate a joint trajectory between current and target configurations
-                qTrajectory = jtraj(qStart, qTarget, numSteps);
-                
-                
-                for repeat = 1:3    
-                    % Animate the robot following the joint trajectory
-                    for i = 1:numSteps
-                        r2.model.animate(qTrajectory(i, :));
-                    end
-                    
-                    % Return to the start position for the next repetition
-                    for i = numSteps:-1:1
-                        r2.model.animate(qTrajectory(i, :));
-                    end
-                end
-             end
+          function R2(self)
+           r2 = LA2.robot2;
+           r2BaseTransform = transl(-2.25, -1.5, 0.6) * trotz(pi/2);
+           r2.model.base = r2BaseTransform;
+           r2.model.plot(zeros(1, r2.model.n));
+           
+           % Define start and target poses
+           targetPose = transl(-2.25, -1, 0.8) * trotx(pi);
+           qStart = r2.model.getpos();
+           qTarget = r2.model.ikcon(targetPose,         qStart);
+           numSteps = 25;
+           qTrajectory = jtraj(qStart, qTarget, numSteps);
+           
+           for repeat = 1:3
+               for i = 1:numSteps
+                   self.checkEStop();
+                   if self.estopFlag
+                       disp('E-Stop activated for R2. Pausing...');
+                       self.qCurrentR2 = qTrajectory(i, :);
+                       while self.estopFlag
+                           self.checkEStop();
+                           pause(0.1);
+                       end
+                       disp('Resuming R2 from E-Stop position.');
+                   end
+                   r2.model.animate(qTrajectory(i, :));
+               end
+               % Return to start
+               for i = numSteps:-1:1
+                   self.checkEStop();
+                   if self.estopFlag
+                       disp('E-Stop activated for R2. Pausing...');
+                       self.qCurrentR2 = qTrajectory(i, :);
+                       while self.estopFlag
+                           self.checkEStop();
+                           pause(0.1);
+                       end
+                       disp('Resuming R2 from E-Stop position.');
+                   end
+                   r2.model.animate(qTrajectory(i, :));
+               end
+           end
+          end       
+   end
+
+   methods(Static)
+%% Environmental & Robots setup
+     function Setup()      
+        hold on
+        axis ([-4 4 -4 6 -2 4]);
+        
+       surf([-4,-4;4,4] ...
+        ,[-4,6;-4,6] ...
+        ,[0.01,0.01;0.01,0.01] ...
+        ,'CData',imread('concrete.jpg') ...
+        ,'FaceColor','texturemap')
+
+    
+        % Safety Features 
+        barriers =[];
+        barriers(1) = PlaceObject('barrier1.5x0.2x1m.ply', [0,1,0]);
+        barriers(2) = PlaceObject('barrier1.5x0.2x1m.ply', [0,1,0]);
+        barriers(3) = PlaceObject('barrier1.5x0.2x1m.ply', [0,1,0]);
+        barriers(4) = PlaceObject('barrier1.5x0.2x1m.ply', [0,1.1,0]);
+        
+        thetaRotBarrier = [];
+        thetaRotBarrier(1)= -pi/2;
+        thetaRotBarrier(2)= pi;
+        thetaRotBarrier(3)= 0;
+        thetaRotBarrier(4) = pi/2;
+        for i =1:length(barriers)
+         tform = hgtransform;
+         Rz = makehgtform('zrotate', thetaRotBarrier(i),'scale', 3);
+         set(tform, 'Matrix', Rz);
+         set(barriers(i), 'Parent', tform);
+        end 
+        
+        fireEx = PlaceObject('fireExtinguisherElevated.ply', [-0.5,2.5,1]);
+        scaleFactor = 2;  
+        scaledVertices = get(fireEx, 'Vertices') * scaleFactor;
+        set(fireEx, 'Vertices', scaledVertices);
+    
+        emergButton = PlaceObject('emergencyStopWallMounted.ply', [-0.25,-1.25,0.5]);
+        emerRot= pi;
+        tform = hgtransform;
+        R_emer = makehgtform('zrotate', emerRot,'scale', 4);
+        set(tform, 'Matrix', R_emer);
+        set(emergButton, 'Parent', tform);
+        
+        % Tables 
+        tableR1  = PlaceObject('tableBrown2.1x1.4x0.5m.ply',[0,0.3,0]);
+        tableBed  = PlaceObject('tableBrown2.1x1.4x0.5m.ply', [0,2,0]);
+        tableR2 = PlaceObject('tableRound0.3x0.3x0.3m.ply', [-0.6,-0.55,-0.1]);
+        
+        tableMainRot = pi/2;
+        tform = hgtransform;
+        R_person = makehgtform('zrotate', tableMainRot,'scale', 1);
+        set(tform, 'Matrix', R_person);
+        set(tableBed, 'Parent', tform);
+        scaleFactor = 3;  
+        scaledVertices = get(tableR2, 'Vertices') * scaleFactor;
+        set(tableR2, 'Vertices', scaledVertices);
+        
+        % People 
+        me = PlaceObject('personMaleOld.ply',[-2,-0.35,-1.2]);
+        meRot = deg2rad(-100);
+        tform = hgtransform;
+        R_me = makehgtform('xrotate', meRot,'scale', 1);
+        set(tform, 'Matrix', R_me);
+        set(me, 'Parent', tform);
+    
+        personWatch = PlaceObject('personMaleConstruction.ply', [-4.8,0,0]);
+        personWatchRot = -pi/2;
+        tform = hgtransform;
+        R_person = makehgtform('zrotate', personWatchRot,'scale', 1);
+        set(tform, 'Matrix', R_person);
+        set(personWatch, 'Parent', tform);
+        
+        % Collision objects 
+        centerpnt = [0,-1.5,0];
+        side = 2;
+        plotOptions.plotFaces = true; % Set this to false to hide cube from plot
+        
+        [vertex,faces,faceNormals] = RectangularPrism(centerpnt-side/2, centerpnt+side/2,plotOptions);
+        
+        groundCenter = [0, 0, 0.25];  % Center point of the cuboid
+        groundSize = [4, 4, 0.49];     % Ground dimensions (wide and thin)
+        plotOptions.plotFaces = false;
+        [groundVertex, groundFaces, groundFaceNormals] = RectangularPrism(groundCenter - groundSize / 2, groundCenter + groundSize / 2, plotOptions);
+        
+        % Create R1 and R2
+        r1 = LA2.robot1;
+        r1BaseTransform = transl(0,0, 0.5);
+        r1.model.base = r1BaseTransform;
+        r1.model.plot(zeros(1, r1.model.n))
+        plotOptions.plotFaces = true;
+        
+        r2 = LA2.robot2;  
+        r2BaseTransform = transl(-2.25, -1.5, 0.6)* trotz(pi/2  );
+        r2.model.base = r2BaseTransform;    
+        r2.model.plot(zeros(1, r2.model.n))
+        plotOptions.plotFaces = true;
+     end
 %% Collision Detection
              function CollisionDetect()
                 r1 = LA2.robot1; 
