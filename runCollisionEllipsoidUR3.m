@@ -7,11 +7,6 @@ function runCollisionEllipsoidUR3()
     q1 = [0,0,0,0,0,0];
     q2 = [pi/2,0,0,0,0,0];
     qMatrix = jtraj(q1,q2,steps);
-    plotOptions = {'noarrow', 'workspace', [-1.5 0.8 -1 1 0 0.8], ...
-               'view', [30, 30], 'floorlevel', 0.0};
-
-    % Plot with transparency
-    r.model.plot(q1, plotOptions{:}, 'linkcolor', 'none', 'facealpha', 0.1);
     
     
     centerPoints = [0.0, 0.0, 0.05; % Base 

@@ -1,7 +1,7 @@
 function Collision()
     %% Robot and Objects 
     hold on
-    axis equal
+    axis ([-1.5 1.5 -3 0.5 0 2])
     
     r1= UR3;
     r1.model.plot([0,0,0,0,0,0]);

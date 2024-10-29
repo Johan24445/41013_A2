@@ -108,9 +108,8 @@ classdef LA2 <handle
             T2 = r1.model.fkine(q2).T;  % Final end-effector pose
         
             for i = 1:stepsR1
-                % Fixed x, y position, movement in z and over-the-head rotation
                 x(:,i) = (1 - scaled_t(i)) * T1(1:3, 4) + scaled_t(i) * T2(1:3, 4);
-                x(3,i) = x(3,i) + 0.2 * sin(pi * scaled_t(i));  % Overhead movement (z-axis)
+                x(3,i) = x(3,i) + 0.2 * sin(pi * scaled_t(i));  
         
                 theta(1,i) = 0;  % Roll (constant)
                 theta(2,i) = pi * scaled_t(i);  % Pitch (over the head)
@@ -248,12 +247,11 @@ classdef LA2 <handle
                 set(phone, 'Vertices', scaledVerticesPhone);
             end
             % Phone drops
+            pause(0.5);
             delete(phone);
             phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,(phonePosUpdated(3)-0.05)/0.01]);
             scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
             set(phone, 'Vertices', scaledVerticesPhone);
-            pause(0.5);
-            
           end 
 %% Activate & Animate R2
           function R2(self)
