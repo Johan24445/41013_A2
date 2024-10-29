@@ -13,9 +13,9 @@ classdef LA2 <handle
 
    methods
        function self = LA2()
-            cla;
-            clc;
-			input('Press enter to begin')
+            % cla;
+            % clc;
+			% input('Press enter to begin')
             self.Setup();
 			self.R1();
             self.R2();
@@ -30,7 +30,7 @@ classdef LA2 <handle
         axis ([-4 4 -4 6 -2 4]);
         
        surf([-4,-4;4,4] ...
-        ,[-4,5;-4,5] ...
+        ,[-4,6;-4,6] ...
         ,[0.01,0.01;0.01,0.01] ...
         ,'CData',imread('concrete.jpg') ...
         ,'FaceColor','texturemap')
@@ -99,7 +99,7 @@ classdef LA2 <handle
         % Collision objects 
         centerpnt = [0,-1.5,0];
         side = 2;
-        plotOptions.plotFaces = false; % Set this to false to hide cube from plot
+        plotOptions.plotFaces = true; % Set this to false to hide cube from plot
         
         [vertex,faces,faceNormals] = RectangularPrism(centerpnt-side/2, centerpnt+side/2,plotOptions);
         
@@ -113,11 +113,13 @@ classdef LA2 <handle
         r1BaseTransform = transl(0,0, 0.5);
         r1.model.base = r1BaseTransform;
         r1.model.plot(zeros(1, r1.model.n))
+        plotOptions.plotFaces = true;
         
         r2 = LA2.robot2;  
         r2BaseTransform = transl(-2.25, -1.5, 0.6)* trotz(pi/2  );
         r2.model.base = r2BaseTransform;    
         r2.model.plot(zeros(1, r2.model.n))
+        plotOptions.plotFaces = true;
     
             
        end
