@@ -3,6 +3,16 @@ function runCollisionEllipsoidUR3()
     axis ([-1.5 0.8 -1 1 0 0.8])
     hold on
     r = UR3; 
+    steps = 25;
+    q1 = [0,0,0,0,0,0];
+    q2 = [pi/2,0,0,0,0,0];
+    qMatrix = jtraj(q1,q2,steps);
+    plotOptions = {'noarrow', 'workspace', [-1.5 0.8 -1 1 0 0.8], ...
+               'view', [30, 30], 'floorlevel', 0.0};
+
+    % Plot with transparency
+    r.model.plot(q1, plotOptions{:}, 'linkcolor', 'none', 'facealpha', 0.1);
+    
     
     centerPoints = [0.0, 0.0, 0.05; % Base 
                     0.0, -0.01, 0.01; % Link 1 
@@ -31,10 +41,14 @@ function runCollisionEllipsoidUR3()
      % mesh.updatePlot();
      % Movement parameters for the mesh
      meshMovement = transl(0.08, 0, 0); % Movement vector (e.g., moving in -X direction)
-     steps = 25;  % Number of movement steps
+     
      
     
     for i = 1:steps
+        % Moves robot
+        r.model.animate(qMatrix(i,:))
+        drawnow();
+
         % Move the mesh incrementally
         newMeshPosition = transl(initMeshPosition)  * meshMovement^i;
         newMeshPosition= newMeshPosition(1:3,4)';
