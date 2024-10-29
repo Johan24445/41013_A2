@@ -120,8 +120,7 @@ classdef LA2 <handle
         r2.model.base = r2BaseTransform;    
         r2.model.plot(zeros(1, r2.model.n))
         plotOptions.plotFaces = true;
-    
-            
+   
        end
 
 %% Activate R1
