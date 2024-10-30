@@ -1,5 +1,4 @@
 %% IsCollision
-% This is based upon the output of questions 2.5 and 2.6
 % Given a robot model (robot), and trajectory (i.e. joint state vector) (qMatrix)
 % and triangle obstacles in the environment (faces,vertex,faceNormals)
 function result = IsCollision(robot,detecting,qMatrix,faces,vertex,faceNormals,returnOnceFound, groundVertex, groundFaces, groundFaceNormals)
