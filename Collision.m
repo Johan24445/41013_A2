@@ -48,6 +48,7 @@ function Collision()
     ylabel('Collision Detected (1 = Yes, 0 = No)');
     title('Collision Detection Over Robot Path');
     grid on;
+    %% 
     
     % Collision avoidance R1
     qWaypoints = [q3;q0];
