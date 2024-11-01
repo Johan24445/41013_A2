@@ -21,8 +21,8 @@ classdef CollisionEllipsoid < handle
                 warning on;
             end
 
-            self.robot.model.plot(self.robot.model.getpos()); 
-            % self.robot.model.plot3d(self.robot.model.getpos()); % shows ellipsoids
+            % self.robot.model.plot(self.robot.model.getpos()); 
+            self.robot.model.plot3d(self.robot.model.getpos()); % shows ellipsoids
         end
         
         %% Check collisions

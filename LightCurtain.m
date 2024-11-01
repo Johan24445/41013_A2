@@ -26,6 +26,7 @@ q1 = [0, 0, 0, 0, 0, 0];  % Initial joint configuration
 q2 = [pi/2, 0, 0, 0, 0, 0];  % Final joint configuration
 
 r.model.plot(q1);  % Plot UR3 in the initial position
+ 
 
 %% Light Curtain Setup
 % Define a light curtain area using a simple surface plot
@@ -39,7 +40,7 @@ lc2 = surf(x, y, z, 'FaceAlpha', 0.1, 'EdgeColor', 'red');  % Create light curta
 handVertices = v;  % Get vertices of hand
 
 %% Light Curtain Detection Demo
-initialHandPosition = transl(0, 0.5, 0.5);  % Initial hand position (X, Y, Z)
+initialHandPosition = transl(0, 0.6, 1);  % Initial hand position (X, Y, Z)
 handPlot = trisurf(f, handVertices(:,1), handVertices(:,2), handVertices(:,3), ...
     'FaceColor', 'blue', 'EdgeColor', 'none', 'FaceAlpha', 0.8);  % Visualize hand
 
@@ -47,8 +48,12 @@ handPlot = trisurf(f, handVertices(:,1), handVertices(:,2), handVertices(:,3), .
 steps = 100;  % Number of steps to move the hand
 movementDirection = transl(0, -0.005, 0);  % Move in the Y-direction (towards light curtain)
 
+qMatrix = jtraj(q1,q2,steps);
 %% Main Loop: Move Hand and Check Light Curtain Detection
 for i = 1:steps
+    r.model.animate(qMatrix(i,:));
+    drawnow();
+
     % Move the hand slightly along Y-axis in each iteration
     handPosition = initialHandPosition * movementDirection^i;  % Update hand position
     
@@ -61,8 +66,9 @@ for i = 1:steps
     curtainOffset = 0.3 + handSizeY;
     % Check if hand enters the light curtain by detecting Y-axis crossing
     if max(transformedVertices(:, 2)) <= curtainOffset  % Check if hand crosses Y=0.2 (light curtain)
-        fprintf('EMERGENCY! FOREIGN OBJECT DETECTED\n');
+        fprintf('EMERGENCY! STOPPING ROBOT.\n');
         set(gcf, 'color', 'r');  % Change figure background to red to indicate detection
+        break
     else
         set(gcf, 'color', 'w');  % Reset figure background to white
     end
