@@ -25,7 +25,7 @@ classdef LA2 <handle
             % clc;
 			% input('Press enter to begin')
             self.Setup();
-            % self.joystick = vrjoystick(1); % Initialize joystick (controller #1)
+            self.joystick = vrjoystick(1); % Initialize joystick (controller #1)
 			self.R1();
             self.R2();
  
@@ -75,183 +75,194 @@ classdef LA2 <handle
         deltaT = 0.05;  % Time step
         epsilon = 0.2;  % Threshold for manipulability
         
+        
+        
+        
+        % Phone handles 
+        robotPhoneOffset = 0.00;
+        tPhoneStart = transl(phoneInitPos(1),phoneInitPos(2),phoneInitPos(3)+robotPhoneOffset);
+        tPhoneEnd1 = transl(phoneFinalPos(1),phoneFinalPos(2),phoneFinalPos(3)+robotPhoneOffset + 0.02);
+        tPhoneEnd = transl(phoneFinalPos(1),phoneFinalPos(2),phoneFinalPos(3)+robotPhoneOffset);
+        
+        q1 = r1.model.ikine(tPhoneStart,'mask', [1 1 1 0 0 0]);
+        q2 = r1.model.ikine(tPhoneEnd1,'mask', [1 1 1 0 0 0]);
+        q3 = r1.model.ikine(tPhoneEnd,'mask', [1 1 1 0 0 0]);
+        
+        % Small steps up and down 
         qMat1 = jtraj(q0,q1,stepsMini);
         qMat2 = jtraj(q2,q3,stepsMini); 
         r1.model.animate(qMat1)
         drawnow();
         
-        % Phone handles 
-        robotPhoneOffset = 0.00;
-        tPhoneStart = transl(phoneInitPos(1),phoneInitPos(2),phoneInitPos(3)+robotPhoneOffset);
-        tPhoneEnd = transl(phoneFinalPos(1),phoneFinalPos(2),phoneFinalPos(3)+robotPhoneOffset);
+        % Time scaling function (sigmoid function)
+        sigmoid_time = @(t) 1 ./ (1 + exp(-20 * (t - 0.2)));
+        scaled_t = sigmoid_time(linspace(0, 1, stepsR1));
         
-        q1 = r1.model.ikine(tPhoneStart,'mask', [1 1 1 0 0 0]);
-        q2 = r1.model.ikine(tPhoneEnd,'mask', [1 1 1 0 0 0]);
+        % Allocate data arrays
+        m = zeros(stepsR1, 1);
+        qMatrix1 = zeros(stepsR1, length(q1));
+        qdot = zeros(stepsR1, 6);
+        x = zeros(3, stepsR1);
+        theta = zeros(3, stepsR1);
+        positionError = zeros(3, stepsR1);
+        angleError = zeros(3, stepsR1);
         
-        % Time scaling to speed up near bed 
+        % Generate initial and final poses
+        T1 = r1.model.fkine(q1).T;
+        T2 = r1.model.fkine(q2).T;
         
-        sigmoid_time = @(t) 1 ./ (1 + exp(-20*(t - 0.2)));  % Sigmoid scaling
-        scaled_t = sigmoid_time(linspace(0, 1, stepsR1));     % Scale the time non-linearly
-        
-        % Allocate array data
-            m = zeros(stepsR1,1);  
-            qMatrix1 = zeros(stepsR1, length(q1));
-            % qMatrix1(1,:) = q1; 
-            qdot = zeros(stepsR1, 6);  % Array for joint velocities
-            x = zeros(3,stepsR1);  % End-effector position
-            theta = zeros(3,stepsR1);  % Roll, Pitch, Yaw angles
-            positionError = zeros(3,stepsR1); % For plotting trajectory error
-            angleError = zeros(3,stepsR1); 
         
             % Generate trajectory for over-the-head movement
-            T1 = r1.model.fkine(q1).T;  % Initial end-effector pose
-            T2 = r1.model.fkine(q2).T;  % Final end-effector pose
-        
             for i = 1:stepsR1
-                x(:,i) = (1 - scaled_t(i)) * T1(1:3, 4) + scaled_t(i) * T2(1:3, 4);
-                x(3,i) = x(3,i) + 0.2 * sin(pi * scaled_t(i));  
-        
-                theta(1,i) = 0;  % Roll (constant)
-                theta(2,i) = pi * scaled_t(i);  % Pitch (over the head)
-                theta(3,i) = 0;  % Yaw (constant)
+                % Interpolate position
+                x(:, i) = (1 - scaled_t(i)) * T1(1:3, 4) + scaled_t(i) * T2(1:3, 4);
+                x(3, i) = x(3, i) + 1.1*sin(pi * scaled_t(i));  % Add overhead motion in z-axis
+            
+                % Interpolate orientation (roll, pitch, yaw)
+                theta(1, i) = 0;  % Roll (constant)
+                theta(2, i) = pi * scaled_t(i);  % Pitch (over the head)
+                theta(3, i) = 0;  % Yaw (constant)
             end
+            
+            % Initial joint configuration
+            T = [rpy2r(theta(1, 1), theta(2, 1), theta(3, 1)) x(:, 1); zeros(1, 3) 1];
+            qInit = zeros(1, 6);
+            qMatrix1(1, :) = r1.model.ikcon(T, qInit);
         
-            T = [rpy2r(theta(1,1),theta(2,1),theta(3,1)) x(:,1);zeros(1,3) 1];          % Create transformation of first point and angle
-            q0 = zeros(1,6);                                                            % Initial guess for joint angles
-            qMatrix1(1,:) = r1.model.ikcon(T,q0);  
-        
-            % RMRC Loop
+            % RMRC loop
             for i = 1:stepsR1 - 1
-                T = r1.model.fkine(qMatrix1(i,:)).T;  % Current end-effector pose
-        
+                T = r1.model.fkine(qMatrix1(i, :)).T;  % Current pose
+            
                 % Calculate position and orientation errors
-                deltaX = x(:,i+1) - T(1:3,4);  % Position error
-                Rd = rpy2r(theta(1,i+1),theta(2,i+1),theta(3,i+1));
-                % Rd = rpy2r(theta(:,i+1)');  % Desired orientation as a rotation matrix
-                Ra = T(1:3,1:3);  % Current orientation
-                Rdot = (1/deltaT) * (Rd - Ra);  % Rotation matrix error
-                S = Rdot * Ra'; % Skew-symmetric matrix for angular velocity
-                linear_velocity = (1/deltaT) * deltaX;  % Linear velocity
-                angular_velocity = [S(3,2); S(1,3); S(2,1)];  % Angular velocity
-                deltaTheta = tr2rpy(Rd*Ra'); % Angle errors 
-        
-                % Combine linear and angular velocity into a single velocity vector
+                deltaX = x(:, i + 1) - T(1:3, 4);
+                Rd = rpy2r(theta(1, i + 1), theta(2, i + 1), theta(3, i + 1));
+                Ra = T(1:3, 1:3);
+                Rdot = (1 / deltaT) * (Rd - Ra);
+                S = Rdot * Ra';
+                linear_velocity = (1 / deltaT) * deltaX;
+                angular_velocity = [S(3, 2); S(1, 3); S(2, 1)];
+                deltaTheta = tr2rpy(Rd * Ra');
+            
+                % Combine velocities
                 xdot = [linear_velocity; angular_velocity];
-        
-                % Get the Jacobian at the current joint position
-                J = r1.model.jacob0(qMatrix1(i,:));
-                m(i) = sqrt(det(J*J'));         % Record manipulability
-        
-                % Apply Damped Least Squares (DLS) if manipulability is low
-        
-        
-                if m(i) < epsilon  % If manipulability is less than given threshold
-                    lambda = (1 - m(i)/epsilon)*5E-2;
+            
+                % Calculate Jacobian and manipulability
+                J = r1.model.jacob0(qMatrix1(i, :));
+                m(i) = sqrt(det(J * J'));
+            
+                % Apply Damped Least Squares if manipulability is low
+                if m(i) < epsilon
+                    lambda = (1 - m(i) / epsilon) * 5E-2;
                 else
                     lambda = 0;
                 end
-                    invJ = inv(J'*J + lambda *eye(6))*J';                                   % DLS Inverse
-        
-        
-                % Compute joint velocities using the inverse Jacobian
-                qdot(i,:) = (invJ * xdot)';  % Joint velocities
-        
-                for j = 1:6                                                             % Loop through joints 1 to 6
-                    if qMatrix1(i,j) + deltaT*qdot(i,j) < r1.model.qlim(j,1)                     % If next joint angle is lower than joint limit...
-                        qdot(i,j) = 0; % Stop the motor
-                    elseif qMatrix1(i,j) + deltaT*qdot(i,j) > r1.model.qlim(j,2)                 % If next joint angle is greater than joint limit ...
-                        qdot(i,j) = 0; % Stop the motor
+                invJ = inv(J' * J + lambda * eye(6)) * J';
+            
+                % Compute joint velocities
+                qdot(i, :) = (invJ * xdot)';
+            
+                % Joint limit check
+                for j = 1:6
+                    if qMatrix1(i, j) + deltaT * qdot(i, j) < r1.model.qlim(j, 1)
+                        qdot(i, j) = 0;
+                    elseif qMatrix1(i, j) + deltaT * qdot(i, j) > r1.model.qlim(j, 2)
+                        qdot(i, j) = 0;
                     end
                 end
-                % Update joint positions based on velocities
-                qMatrix1(i+1,:) = qMatrix1(i,:) + deltaT * qdot(i,:);  % Next joint configuration
-                positionError(:,i) = deltaX;                               
-                angleError(:,i) = deltaTheta;  
-            end
-
-             % Precompute the trajectory using the scaled time
-            qMatrix2 =zeros(stepsR1, length(q3));
-            for i = 1:stepsR1
-                % Interpolate joint space positions based on scaled time
-                qMatrix2(i, :) = (1 - scaled_t(i)) * q3 + scaled_t(i) * q0;
+            
+                % Update joint positions
+                qMatrix1(i + 1, :) = qMatrix1(i, :) + deltaT * qdot(i, :);
+                positionError(:, i) = deltaX;
+                angleError(:, i) = deltaTheta;
             end
         
-              % Animate the motion from q1 to q2
-                isCollision = true;
-                qMatrix1CA = [];
-                checkedTillWaypoint = 1;
-                while (isCollision)
-                    startWaypoint = checkedTillWaypoint;
-                    for i = startWaypoint:size(qMatrix1,1)-1
-                        qMatrixJoin = InterpolateWaypointRadians(qMatrix1(i:i+1,:),deg2rad(2));
-                        if ~IsCollision(r1.model,false, qMatrixJoin,faces,vertex,faceNormals, false, groundVertex, groundFaces, groundFaceNormals)
-                            qMatrix1CA = [qMatrix1CA; qMatrixJoin]; %#ok<AGROW> 
-                            isCollision = false;
-                            checkedTillWaypoint = i+1;
-                            % Try and join to the final goal (q0)
-                            qMatrixJoin = InterpolateWaypointRadians([qMatrix1CA(end,:); qMatrix1(end,:)],deg2rad(2));
-                            if ~IsCollision(r1.model,false, qMatrixJoin,faces,vertex,faceNormals,false, groundVertex, groundFaces, groundFaceNormals)
-                                qMatrix1CA = [qMatrix1CA;qMatrixJoin];
-                                % Reached goal without collision, so break out
-                                break;
+        
+        
+            % Animate the motion from q1 to q2
+            isCollision = true;
+                        qMatrix1CA = [];
+                        checkedTillWaypoint = 1;
+                        while (isCollision)
+                            startWaypoint = checkedTillWaypoint;
+                            for i = startWaypoint:size(qMatrix1,1)-1
+                                qMatrixJoin = InterpolateWaypointRadians(qMatrix1(i:i+1,:),deg2rad(15));
+                                if ~IsCollision(r1.model,false, qMatrixJoin,faces,vertex,faceNormals, false, groundVertex, groundFaces, groundFaceNormals)
+                                    qMatrix1CA = [qMatrix1CA; qMatrixJoin]; %#ok<AGROW> 
+                                    isCollision = false;
+                                    checkedTillWaypoint = i+1;
+                                    % Try and join to the final goal (q0)
+                                    qMatrixJoin = InterpolateWaypointRadians([qMatrix1CA(end,:); qMatrix1(end,:)],deg2rad(15));
+                                    if ~IsCollision(r1.model,false, qMatrixJoin,faces,vertex,faceNormals,false, groundVertex, groundFaces, groundFaceNormals)
+                                        qMatrix1CA = [qMatrix1CA;qMatrixJoin];
+                                        % Reached goal without collision, so break out
+                                        break;
+                                    end
+                                else
+                                    % Randomly pick a pose that is not in collision
+                                    qRand = (2 * rand(1,6) - 1) * pi;
+                                    while IsCollision(r1.model,false,qRand,faces,vertex,faceNormals, false, groundVertex, groundFaces, groundFaceNormals)
+                                        qRand = (2 * rand(1,6) - 1) * pi;
+                                    end
+                                    qMatrix1 =[ qMatrix1(1:i,:); qRand; qMatrix1(i+1:end,:)];
+                                    isCollision = true;
+                                    break;
+                                end
                             end
-                        else
-                            % Randomly pick a pose that is not in collision
-                            qRand = (2 * rand(1,6) - 1) * pi;
-                            while IsCollision(r1.model,false,qRand,faces,vertex,faceNormals, false, groundVertex, groundFaces, groundFaceNormals)
-                                qRand = (2 * rand(1,6) - 1) * pi;
-                            end
-                            qMatrix1 =[ qMatrix1(1:i,:); qRand; qMatrix1(i+1:end,:)];
-                            isCollision = true;
-                            break;
                         end
+                                
+                    for i = 1:size(qMatrix1CA,1)
+                        r1.model.animate(qMatrix1CA(i, :));  % Animate robot
+                        drawnow();
+                        currentQ_R1 = qMatrix1CA(i, :);
+                        currentPos_R1 = r1.model.fkine(currentQ_R1).T; % End effector pose of robot during motion
+                        currentPos_R1 = currentPos_R1(1:3, 4);
+                        currentPos_R1(3) = currentPos_R1(3) - robotPhoneOffset;
+                        phonePosUpdated = currentPos_R1';
+                        delete(phone); 
+                        phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,phonePosUpdated(3)/0.01]);
+                        scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
+                        set(phone, 'Vertices', scaledVerticesPhone);
+                      
                     end
-                end
-                        
-            for i = 1:size(qMatrix1,1)
-                r1.model.animate(qMatrix1CA(i, :));  % Animate robot
-                drawnow();
-                currentQ_R1 = qMatrix1CA(i, :);
-                currentPos_R1 = r1.model.fkine(currentQ_R1).T; % End effector pose of robot during motion
-                currentPos_R1 = currentPos_R1(1:3, 4);
-                currentPos_R1(3) = currentPos_R1(3) - robotPhoneOffset;
-                phonePosUpdated = currentPos_R1';
-                delete(phone); 
-                phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,phonePosUpdated(3)/0.01]);
-                scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
-                set(phone, 'Vertices', scaledVerticesPhone);
-            end
-            delete(phone);
-            phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,(phonePosUpdated(3)-0.05)/0.01]);
-            scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
-            set(phone, 'Vertices', scaledVerticesPhone);
-                pause(0.5);
+        
             
-            % Picks phone (q2 to q3)
-            r1.model.animate(qMat2)
+        % Phone drops
+        delete(phone);
+        phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,(phonePosUpdated(3)-0.02)/0.01]);
+        scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
+        set(phone, 'Vertices', scaledVerticesPhone);
+            
+        % Pick phone q2-q3
+        r1.model.animate(qMat2)
+        drawnow();
+           
+        % Precompute the trajectory using the scaled time
+        qMatrix2 =zeros(stepsR1, length(q3));
+        for i = 1:stepsR1
+            % Interpolate joint space positions based on scaled time
+            qMatrix2(i, :) = (1 - scaled_t(i)) * q3 + scaled_t(i) * q0;
+        end
+        
+        % Animate motion q3-q0
+        for i = 1:stepsR1
+            r1.model.animate(qMatrix2(i, :));
             drawnow();
-            
-            
-            % Animate motion from q3 to q0
-            for i = 1:stepsR1
-                r1.model.animate(qMatrix2(i, :));
-                drawnow();
-                currentQ_R1 = qMatrix2(i, :);
-                currentPos_R1 = r1.model.fkine(currentQ_R1).T; % End effector pose of robot during motion
-                currentPos_R1 = currentPos_R1(1:3, 4);
-                currentPos_R1(3) = currentPos_R1(3) - robotPhoneOffset;
-                phonePosUpdated = currentPos_R1';
-                delete(phone); 
-                phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,phonePosUpdated(3)/0.01]);
-                scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
-                set(phone, 'Vertices', scaledVerticesPhone);
-            end
-            % Phone drops
-            pause(0.5);
-            delete(phone);
-            phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,(phonePosUpdated(3)-0.05)/0.01]);
+            currentQ_R1 = qMatrix2(i, :);
+            currentPos_R1 = r1.model.fkine(currentQ_R1).T; % End effector pose of robot during motion
+            currentPos_R1 = currentPos_R1(1:3, 4);
+            currentPos_R1(3) = currentPos_R1(3) - robotPhoneOffset;
+            phonePosUpdated = currentPos_R1';
+            delete(phone); 
+            phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,phonePosUpdated(3)/0.01]);
             scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
             set(phone, 'Vertices', scaledVerticesPhone);
+           
+        end
+        % Phone drops
+        delete(phone);
+        phone = PlaceObject('phone.ply', [phonePosUpdated(1)/0.01,phonePosUpdated(2)/0.01,(phonePosUpdated(3)-0.07)/0.01]);
+        scaledVerticesPhone = get(phone, 'Vertices') * 0.01;
+        set(phone, 'Vertices', scaledVerticesPhone);
           end 
 %% Activate & Animate R2
           function R2(self)
